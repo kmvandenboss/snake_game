@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Defense</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: 100vw;
+            max-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #gameCanvas {
+            border-radius: 12px;
+            box-shadow: 0 0 40px rgba(0, 255, 136, 0.3);
+            cursor: none;
+            touch-action: none;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        #startScreen, #gameOverScreen, #winScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 12px;
+            color: white;
+            text-align: center;
+            padding: 15px;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        h1 {
+            font-size: clamp(28px, 8vw, 48px);
+            margin-bottom: 15px;
+            background: linear-gradient(45deg, #ff6b6b, #ffd93d, #6bcb77);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            font-size: clamp(14px, 4vw, 18px);
+            color: #aaa;
+            margin-bottom: 20px;
+            padding: 0 10px;
+        }
+        
+        button {
+            background: linear-gradient(45deg, #00d4ff, #00ff88);
+            border: none;
+            padding: 12px 40px;
+            font-size: clamp(18px, 5vw, 24px);
+            font-weight: bold;
+            color: #1a1a2e;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 10px;
+        }
+        
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.5);
+        }
+        
+        .stats {
+            font-size: clamp(18px, 5vw, 24px);
+            margin: 15px 0;
+            color: #ffd93d;
+        }
+        
+        .controls {
+            margin-top: 15px;
+            font-size: clamp(12px, 3vw, 14px);
+            color: #888;
+        }
+        
+        #levelIndicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        #loadingScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.95);
+            border-radius: 12px;
+            color: white;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="ui">
+            <span id="scoreDisplay">Score: 0</span>
+            <span id="levelDisplay">Level: 1</span>
+            <span id="gunsDisplay">Guns: 1</span>
+        </div>
+        
+        <div id="levelIndicator"></div>
+
+        <div id="loadingScreen">
+            <h1>Loading...</h1>
+            <p class="subtitle">Preparing scales</p>
+        </div>
+        
+        <div id="startScreen" class="hidden">
+            <h1>🐍 SNAKE DEFENSE 🔫</h1>
+            <p class="subtitle">The snake is closing in! Destroy it before it reaches the center!</p>
+            <button id="startBtn">START GAME</button>
+            <p class="controls">
+                Aim with mouse/finger • Guns auto-fire!<br>
+                <span style="color: #44aaff">🔥 Blue = Fire Rate Boost</span><br>
+                <span style="color: #aa44ff">🔫 Purple = Extra Gun</span>
+            </p>
+        </div>
+        
+        <div id="gameOverScreen" class="hidden">
+            <h1>💀 GAME OVER 💀</h1>
+            <p class="stats">Final Score: <span id="finalScore">0</span></p>
+            <p class="stats">Level Reached: <span id="finalLevel">1</span></p>
+            <button id="restartBtn">PLAY AGAIN</button>
+        </div>
+        
+        <div id="winScreen" class="hidden">
+            <h1>🏆 VICTORY! 🏆</h1>
+            <p class="stats">You beat all levels!</p>
+            <p class="stats">Final Score: <span id="winScore">0</span></p>
+            <button id="playAgainBtn">PLAY AGAIN</button>
+        </div>
+    </div>
+    
+    <script>
+        // Error handler for debugging
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            console.error('Game Error:', msg, 'Line:', lineNo, 'Col:', columnNo);
+            return false;
+        };
+        
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // ============== SCALE IMAGES ==============
+        // Load the scale images
+        const redScaleImg = new Image();
+        const yellowScaleImg = new Image();
+        const snakeHeadImg = new Image();
+        const yellowTailScaleImg = new Image();
+        let imagesLoaded = 0;
+        const totalImages = 4;
+
+        function onImageLoad() {
+            imagesLoaded++;
+            if (imagesLoaded >= totalImages) {
+                // All images loaded, hide loading screen and show start screen
+                document.getElementById('loadingScreen').classList.add('hidden');
+                document.getElementById('startScreen').classList.remove('hidden');
+            }
+        }
+
+        redScaleImg.onload = onImageLoad;
+        yellowScaleImg.onload = onImageLoad;
+        snakeHeadImg.onload = onImageLoad;
+        yellowTailScaleImg.onload = onImageLoad;
+
+        // Handle image load errors - fall back to embedded data or show error
+        redScaleImg.onerror = function() {
+            console.error('Failed to load red_scale.png');
+            onImageLoad(); // Continue anyway
+        };
+        yellowScaleImg.onerror = function() {
+            console.error('Failed to load yellow_scale.png');
+            onImageLoad(); // Continue anyway
+        };
+        snakeHeadImg.onerror = function() {
+            console.error('Failed to load snake_head.png');
+            onImageLoad(); // Continue anyway
+        };
+        yellowTailScaleImg.onerror = function() {
+            console.error('Failed to load yellow_tail_scale.png');
+            onImageLoad(); // Continue anyway
+        };
+
+        // Set the source paths - these should be in the same folder as the HTML
+        redScaleImg.src = 'scale_red.png';
+        yellowScaleImg.src = 'scale_yellow.png';
+        snakeHeadImg.src = 'snake_head.png';
+        yellowTailScaleImg.src = 'yellow_tail_scale.png';
+        
+        // Game state
+        let gameState = 'start';
+        let score = 0;
+        let level = 1;
+        const maxLevel = 10;
+        
+        // Responsive sizing - these get set by resizeCanvas()
+        let canvasWidth, canvasHeight;
+        let centerX, centerY;
+        let scale = 1; // Scale factor for all game elements
+        
+        // Base dimensions (game is designed for these, then scaled)
+        const BASE_WIDTH = 400;
+        const BASE_HEIGHT = 600;
+        
+        // Player input - declare early since resizeCanvas uses these
+        let mouseX = 0;
+        let mouseY = 0;
+        let isPointerDown = false;
+        
+        function resizeCanvas() {
+            // Get available space (accounting for mobile browsers)
+            const maxWidth = window.innerWidth;
+            const maxHeight = window.innerHeight;
+            
+            // Calculate scale to fit while maintaining aspect ratio
+            const scaleX = maxWidth / BASE_WIDTH;
+            const scaleY = maxHeight / BASE_HEIGHT;
+            scale = Math.min(scaleX, scaleY, 1.5); // Cap scale so it doesn't get too big on desktop
+            
+            // Set canvas size
+            canvasWidth = Math.floor(BASE_WIDTH * scale);
+            canvasHeight = Math.floor(BASE_HEIGHT * scale);
+            
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            
+            // Update center point
+            centerX = canvasWidth / 2;
+            centerY = canvasHeight / 2 + (30 * scale);
+            
+            // Update mouse position to center if not set
+            if (mouseX === 0 && mouseY === 0) {
+                mouseX = centerX;
+                mouseY = centerY - 100 * scale;
+            }
+        }
+        
+        // Initialize canvas size
+        resizeCanvas();
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            // Recalculate snake positions after resize
+            if (snakePath.length > 0) {
+                updateSnakePositions();
+            }
+        });
+        
+        // Snake as a continuous path of points
+        let snakePath = [];
+        let snakeSegments = [];
+        
+        // These are now functions that return scaled values
+        function getSnakeWidth() { return 36 * scale; }
+        function getPlatformRadius() { return 45 * scale; }
+        function getSpiralBase() { return 55 * scale; }
+        function getSpiralGrowth() { return 20 * scale; }
+        
+        let snakeSpeed = 0.15;
+        let snakeAngle = 0;
+        
+        // Guns and bullets
+        let guns = [];
+        let bullets = [];
+        function getBulletSpeed() { return 12 * scale; }
+        const fireRate = 18; // Slower fire rate (was 8)
+        let globalFireTimer = 0;
+        
+        // Effects
+        let particles = [];
+        let damageNumbers = [];
+        
+        // Spiral constants
+        const anglePerPoint = 0.025; // Angular spacing between path points
+        
+        // Helper: get x,y position on spiral for a given angle
+        function getSpiralPosition(angle) {
+            const r = getSpiralBase() + angle * getSpiralGrowth();
+            return {
+                x: centerX + Math.cos(angle) * r,
+                y: centerY + Math.sin(angle) * r
+            };
+        }
+        
+        // Get radius for a given angle
+        function getSpiralRadius(angle) {
+            return getSpiralBase() + angle * getSpiralGrowth();
+        }
+        
+        // Update all snake path positions based on current head angle
+        function updateSnakePositions() {
+            for (let i = 0; i < snakePath.length; i++) {
+                const angle = snakeAngle + snakePath[i].offset;
+                const pos = getSpiralPosition(angle);
+                snakePath[i].x = pos.x;
+                snakePath[i].y = pos.y;
+            }
+        }
+        
+        // Segment types for bonuses
+        const SEGMENT_NORMAL = 'normal';
+        const SEGMENT_BONUS_FIRERATE = 'bonus_firerate';
+        const SEGMENT_BONUS_GUN = 'bonus_gun';
+        
+        // Active power-ups
+        let fireRateBonus = 0;
+        let bonusGuns = 0;
+        
+        // Initialize snake
+        function initSnake() {
+            snakePath = [];
+            snakeSegments = [];
+            
+            // Reset fire rate bonus for new level (guns persist)
+            fireRateBonus = 0;
+            
+            // MUCH longer snake - fills entire visible path and extends off-screen
+            const pathLength = 800 + level * 100;
+            
+            // Snake starts VERY close to center - creates urgency!
+            // Head starts just outside the platform
+            const headRadius = getPlatformRadius() + 30 * scale;
+            
+            // Calculate starting angle for this radius
+            snakeAngle = (headRadius - getSpiralBase()) / getSpiralGrowth();
+            
+            // Build initial spiral path from head (inside) to tail (outside)
+            for (let i = 0; i < pathLength; i++) {
+                snakePath.push({
+                    offset: i * anglePerPoint,
+                    x: 0,
+                    y: 0
+                });
+            }
+            
+            // Calculate initial positions
+            updateSnakePositions();
+            
+            // Create segments with VARIABLE lengths and types
+            createVariableSegments();
+        }
+        
+        function createVariableSegments() {
+            const baseHP = 18 + level * 10; // Much higher base HP
+            let currentIndex = 0;
+            let segmentNumber = 0;
+            
+            while (currentIndex < snakePath.length - 10) {
+                let segmentType = SEGMENT_NORMAL;
+                let segmentLength;
+                let hp;
+                
+                if (segmentNumber === 0) {
+                    // HEAD SEGMENT: Short but VERY high HP - tough to kill!
+                    segmentLength = 15 + Math.floor(Math.random() * 5);
+                    hp = Math.floor(baseHP * 4) + level * 15;
+                } else if (segmentNumber < 3) {
+                    // First few segments near head: Short, high HP
+                    segmentLength = 18 + Math.floor(Math.random() * 8);
+                    hp = Math.floor(baseHP * 2.5) + level * 8;
+                } else {
+                    // Rest of snake: Random variety
+                    const roll = Math.random();
+                    
+                    if (roll < 0.10) {
+                        // QUICK WIN: Long segment with LOW HP - satisfying to destroy!
+                        segmentLength = 50 + Math.floor(Math.random() * 30);
+                        hp = Math.floor(baseHP * 0.5) + Math.floor(Math.random() * 8);
+                    } else if (roll < 0.16 && level >= 2) {
+                        // BONUS: Fire rate boost segment (glowing blue)
+                        segmentType = SEGMENT_BONUS_FIRERATE;
+                        segmentLength = 25 + Math.floor(Math.random() * 10);
+                        hp = Math.floor(baseHP * 1.0);
+                    } else if (roll < 0.20 && level >= 3) {
+                        // BONUS: Extra gun segment (glowing purple)
+                        segmentType = SEGMENT_BONUS_GUN;
+                        segmentLength = 30 + Math.floor(Math.random() * 10);
+                        hp = Math.floor(baseHP * 1.2);
+                    } else if (roll < 0.45) {
+                        // MEDIUM: Normal length, normal HP
+                        segmentLength = 25 + Math.floor(Math.random() * 15);
+                        hp = baseHP + Math.floor(Math.random() * (level * 5));
+                    } else if (roll < 0.70) {
+                        // LONG: Longer segment, proportionally more HP
+                        segmentLength = 40 + Math.floor(Math.random() * 25);
+                        hp = Math.floor(baseHP * 1.8) + Math.floor(Math.random() * (level * 6));
+                    } else {
+                        // SHORT: Short segment, moderate HP
+                        segmentLength = 15 + Math.floor(Math.random() * 10);
+                        hp = Math.floor(baseHP * 0.8) + Math.floor(Math.random() * (level * 3));
+                    }
+                }
+                
+                // Make sure we don't exceed path length
+                const endIndex = Math.min(currentIndex + segmentLength, snakePath.length);
+                
+                snakeSegments.push({
+                    startIndex: currentIndex,
+                    endIndex: endIndex,
+                    hp: hp,
+                    maxHp: hp,
+                    colorBand: segmentNumber % 2,
+                    isHead: segmentNumber === 0,
+                    segmentType: segmentType
+                });
+                
+                currentIndex = endIndex;
+                segmentNumber++;
+            }
+        }
+        
+        function initGuns() {
+            guns = [];
+            // Base guns from level + any bonus guns earned
+            const baseGunCount = Math.min(1 + Math.floor(level / 2), 5);
+            const gunCount = Math.min(baseGunCount + bonusGuns, 8); // Max 8 guns
+            const gunRadius = 30 * scale;
+            
+            for (let i = 0; i < gunCount; i++) {
+                const angle = (i / gunCount) * Math.PI * 2 - Math.PI / 2;
+                guns.push({
+                    x: centerX + Math.cos(angle) * gunRadius,
+                    y: centerY + Math.sin(angle) * gunRadius,
+                    angle: 0,
+                    fireTimer: Math.floor(i * fireRate / gunCount)
+                });
+            }
+            
+            document.getElementById('gunsDisplay').textContent = `Guns: ${gunCount}`;
+        }
+        
+        // Add a bonus gun (called when bonus segment destroyed)
+        function addBonusGun() {
+            bonusGuns++;
+            // Rebuild guns to add the new one
+            initGuns();
+            
+            // Show notification
+            showPowerUpNotification('+1 GUN!', '#aa44ff');
+        }
+        
+        // Boost fire rate (called when bonus segment destroyed)
+        function boostFireRate() {
+            fireRateBonus += 2; // Reduce fire timer by 2 frames (smaller boost)
+            showPowerUpNotification('FIRE RATE UP!', '#44aaff');
+        }
+        
+        // Show power-up notification
+        function showPowerUpNotification(text, color) {
+            const indicator = document.getElementById('levelIndicator');
+            indicator.textContent = text;
+            indicator.style.color = color;
+            indicator.style.opacity = 1;
+            setTimeout(() => {
+                indicator.style.opacity = 0;
+                indicator.style.color = 'white';
+            }, 1000);
+        }
+        
+        function updateSnake() {
+            if (snakePath.length === 0) return;
+            
+            // Move head along the spiral toward center
+            snakeAngle -= snakeSpeed * 0.008;
+            
+            // Update ALL positions based on the spiral formula
+            updateSnakePositions();
+            
+            // Check if head reached center (using scaled values)
+            const headRadius = getSpiralRadius(snakeAngle);
+            if (headRadius < getPlatformRadius() + 15 * scale) {
+                gameOver();
+            }
+        }
+        
+        function getSegmentAtIndex(pathIndex) {
+            for (let i = 0; i < snakeSegments.length; i++) {
+                const seg = snakeSegments[i];
+                if (pathIndex >= seg.startIndex && pathIndex < seg.endIndex) {
+                    return { segment: seg, index: i };
+                }
+            }
+            return null;
+        }
+        
+        function updateGuns() {
+            // All guns aim at mouse position
+            const aimAngle = Math.atan2(mouseY - centerY, mouseX - centerX);
+            
+            for (const gun of guns) {
+                gun.angle = aimAngle;
+            }
+            
+            // Auto-fire while playing - fireRateBonus reduces wait time
+            globalFireTimer--;
+            const effectiveFireRate = Math.max(6, fireRate - fireRateBonus); // Min 6 frames between shots
+            if (globalFireTimer <= 0) {
+                globalFireTimer = effectiveFireRate;
+                
+                // Each gun fires with slight spread for multi-gun effect
+                const gunCount = guns.length;
+                guns.forEach((gun, index) => {
+                    // Spread guns evenly if multiple
+                    const spreadOffset = gunCount > 1 
+                        ? (index - (gunCount - 1) / 2) * 0.08 
+                        : 0;
+                    fireBullet(gun, spreadOffset);
+                });
+            }
+        }
+        
+        function fireBullet(gun, spreadOffset = 0) {
+            const spread = (Math.random() - 0.5) * 0.1 + spreadOffset;
+            const speed = getBulletSpeed();
+            bullets.push({
+                x: gun.x,
+                y: gun.y,
+                vx: Math.cos(gun.angle + spread) * speed,
+                vy: Math.sin(gun.angle + spread) * speed,
+                damage: 1 + Math.floor(level / 3)
+            });
+        }
+        
+        // Particle colors for explosions
+        const particleColors = {
+            0: ['#ff6666', '#ff3333', '#cc0000', '#ffaaaa'], // Red
+            1: ['#ffdd66', '#ffcc00', '#cc9900', '#ffeeaa']  // Yellow
+        };
+        
+        function updateBullets() {
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                bullet.x += bullet.vx;
+                bullet.y += bullet.vy;
+                
+                let hit = false;
+                const snakeW = getSnakeWidth();
+                
+                for (let j = 0; j < snakePath.length; j += 2) {
+                    const p = snakePath[j];
+                    const dx = bullet.x - p.x;
+                    const dy = bullet.y - p.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < snakeW / 2 + 4 * scale) {
+                        const segInfo = getSegmentAtIndex(j);
+                        if (segInfo) {
+                            segInfo.segment.hp -= bullet.damage;
+                            hit = true;
+                            
+                            damageNumbers.push({
+                                x: p.x + (Math.random() - 0.5) * 20,
+                                y: p.y,
+                                value: bullet.damage,
+                                life: 25,
+                                vy: -3
+                            });
+                            
+                            const colors = particleColors[segInfo.segment.colorBand];
+                            for (let k = 0; k < 8; k++) {
+                                particles.push({
+                                    x: bullet.x,
+                                    y: bullet.y,
+                                    vx: (Math.random() - 0.5) * 12,
+                                    vy: (Math.random() - 0.5) * 12,
+                                    life: 25,
+                                    color: colors[k % colors.length]
+                                });
+                            }
+                            
+                            if (segInfo.segment.hp <= 0) {
+                                destroySegment(segInfo.index);
+                            }
+                        }
+                        break;
+                    }
+                }
+                
+                if (hit || bullet.x < 0 || bullet.x > canvasWidth || 
+                    bullet.y < 0 || bullet.y > canvasHeight) {
+                    bullets.splice(i, 1);
+                }
+            }
+        }
+        
+        function destroySegment(segIndex) {
+            const segment = snakeSegments[segIndex];
+            const midIndex = Math.floor((segment.startIndex + segment.endIndex) / 2);
+            const midPoint = snakePath[Math.min(midIndex, snakePath.length - 1)];
+            
+            // Determine particle colors based on segment type
+            let colors;
+            if (segment.segmentType === SEGMENT_BONUS_FIRERATE) {
+                colors = ['#44aaff', '#22ddff', '#0088ff', '#88ddff']; // Blue
+            } else if (segment.segmentType === SEGMENT_BONUS_GUN) {
+                colors = ['#aa44ff', '#dd22ff', '#8800ff', '#dd88ff']; // Purple
+            } else {
+                colors = particleColors[segment.colorBand];
+            }
+            
+            if (midPoint) {
+                // More particles for bonus segments
+                const particleCount = segment.segmentType !== SEGMENT_NORMAL ? 50 : 30;
+                for (let i = 0; i < particleCount; i++) {
+                    const angle = (i / particleCount) * Math.PI * 2;
+                    const speed = 5 + Math.random() * 8;
+                    particles.push({
+                        x: midPoint.x,
+                        y: midPoint.y,
+                        vx: Math.cos(angle) * speed,
+                        vy: Math.sin(angle) * speed,
+                        life: 40,
+                        color: colors[i % colors.length]
+                    });
+                }
+            }
+            
+            // Apply power-ups from bonus segments
+            if (segment.segmentType === SEGMENT_BONUS_FIRERATE) {
+                boostFireRate();
+            } else if (segment.segmentType === SEGMENT_BONUS_GUN) {
+                addBonusGun();
+            }
+            
+            score += segment.maxHp * 10;
+            // Bonus score for bonus segments
+            if (segment.segmentType !== SEGMENT_NORMAL) {
+                score += 500;
+            }
+            document.getElementById('scoreDisplay').textContent = `Score: ${score}`;
+            
+            const removeCount = segment.endIndex - segment.startIndex;
+            
+            // Calculate how much offset we're removing
+            const removedOffset = removeCount * anglePerPoint;
+            
+            // MOVE HEAD BACK: Increase snakeAngle to push the head away from center
+            // This is the key mechanic - destroying segments buys you space!
+            snakeAngle += removedOffset;
+            
+            // Adjust offsets of points AFTER the removed segment to maintain continuity
+            // Without this, there would be a gap in the spiral
+            for (let i = segment.endIndex; i < snakePath.length; i++) {
+                snakePath[i].offset -= removedOffset;
+            }
+            
+            // Now remove the points
+            snakePath.splice(segment.startIndex, removeCount);
+            
+            // Update segment indices (segments after the removed one shift down)
+            snakeSegments.splice(segIndex, 1);
+            for (let i = segIndex; i < snakeSegments.length; i++) {
+                snakeSegments[i].startIndex -= removeCount;
+                snakeSegments[i].endIndex -= removeCount;
+            }
+            
+            if (snakeSegments.length > 0) {
+                snakeSegments[0].isHead = true;
+            }
+            
+            // Recalculate positions immediately so snake looks correct
+            updateSnakePositions();
+            
+            if (snakeSegments.length === 0) {
+                levelComplete();
+            }
+        }
+        
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vx *= 0.93;
+                p.vy *= 0.93;
+                p.life--;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+            
+            for (let i = damageNumbers.length - 1; i >= 0; i--) {
+                const d = damageNumbers[i];
+                d.y += d.vy;
+                d.life--;
+                if (d.life <= 0) damageNumbers.splice(i, 1);
+            }
+        }
+        
+        // ============== NEW SCALE-BASED SNAKE DRAWING ==============
+        
+        // Base colors for the solid tube underneath scales
+        const baseColors = {
+            0: { fill: '#cc2222', edge: '#881111' }, // Red
+            1: { fill: '#ccaa00', edge: '#886600' }  // Yellow
+        };
+        
+        // Bonus segment colors
+        const bonusColors = {
+            'bonus_firerate': { fill: '#2288dd', edge: '#1155aa', glow: '#44aaff' },
+            'bonus_gun': { fill: '#8822dd', edge: '#5511aa', glow: '#aa44ff' }
+        };
+        
+        function drawSnakeBody() {
+            if (snakePath.length < 4) return;
+            
+            const snakeW = getSnakeWidth();
+            const scaleSize = snakeW * 1.1; // Size of each scale cluster
+            const scaleSpacing = scaleSize * 0.55; // How far apart to place scales (overlap them)
+            
+            // ===== FIRST PASS: Draw solid base tubes for clean edges =====
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            for (let segIdx = snakeSegments.length - 1; segIdx >= 0; segIdx--) {
+                const segment = snakeSegments[segIdx];
+                
+                // Use bonus colors if it's a bonus segment, otherwise use normal colors
+                let colors;
+                if (segment.segmentType && bonusColors[segment.segmentType]) {
+                    colors = bonusColors[segment.segmentType];
+                } else {
+                    colors = baseColors[segment.colorBand];
+                }
+                
+                const startI = Math.max(0, segment.startIndex);
+                const endI = Math.min(snakePath.length - 1, segment.endIndex);
+                
+                if (startI >= snakePath.length || endI < 0) continue;
+                
+                // Draw the solid tube body
+                ctx.beginPath();
+                ctx.moveTo(snakePath[startI].x, snakePath[startI].y);
+                for (let i = startI; i <= endI && i < snakePath.length; i++) {
+                    ctx.lineTo(snakePath[i].x, snakePath[i].y);
+                }
+                
+                // Main fill
+                ctx.strokeStyle = colors.fill;
+                ctx.lineWidth = snakeW;
+                ctx.stroke();
+                
+                // Darker edge outline for depth
+                ctx.strokeStyle = colors.edge;
+                ctx.lineWidth = snakeW + 4 * scale;
+                ctx.globalCompositeOperation = 'destination-over';
+                ctx.stroke();
+                ctx.globalCompositeOperation = 'source-over';
+                
+                // Add pulsing glow effect for bonus segments
+                if (segment.segmentType && bonusColors[segment.segmentType]) {
+                    const glowColor = bonusColors[segment.segmentType].glow;
+                    const pulseIntensity = 0.3 + 0.2 * Math.sin(Date.now() / 200);
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(snakePath[startI].x, snakePath[startI].y);
+                    for (let i = startI; i <= endI && i < snakePath.length; i++) {
+                        ctx.lineTo(snakePath[i].x, snakePath[i].y);
+                    }
+                    ctx.strokeStyle = glowColor;
+                    ctx.lineWidth = snakeW + 12 * scale;
+                    ctx.globalAlpha = pulseIntensity;
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                }
+            }
+            
+            // ===== SECOND PASS: Draw scale images on top (if loaded) =====
+            // Draw from head to tail so tail segments overlap head segments at boundaries
+            for (let segIdx = 0; segIdx < snakeSegments.length; segIdx++) {
+                const segment = snakeSegments[segIdx];
+                
+                // Choose the right scale image based on color band
+                // For bonus segments, still use alternating colors but with tint
+                const scaleImg = segment.colorBand === 0 ? redScaleImg : yellowScaleImg;
+                
+                // Only draw scales if image is loaded
+                if (scaleImg.complete && scaleImg.naturalWidth > 0) {
+                    const startI = Math.max(0, segment.startIndex);
+                    const endI = Math.min(snakePath.length - 1, segment.endIndex);
+                    
+                    if (startI < snakePath.length && endI >= 0) {
+                        // Draw scales along this segment - from start to end (head to tail direction)
+                        // This way each scale overlaps the one behind it
+                        let distanceTraveled = 0;
+                        
+                        for (let i = startI; i <= endI; i++) {
+                            // Check if we should draw a scale at this point
+                            if (i > 0) {
+                                const curr = snakePath[i];
+                                const prev = snakePath[i - 1];
+                                const dx = curr.x - prev.x;
+                                const dy = curr.y - prev.y;
+                                distanceTraveled += Math.sqrt(dx * dx + dy * dy);
+                            }
+                            
+                            // Only draw scales at regular intervals
+                            if (distanceTraveled >= scaleSpacing || i === startI) {
+                                distanceTraveled = 0;
+                                
+                                const point = snakePath[i];
+                                
+                                // Get direction of snake at this point
+                                let angle = 0;
+                                if (i > 0 && i < snakePath.length - 1) {
+                                    const prev = snakePath[i + 1]; // Behind (toward tail)
+                                    const next = snakePath[i - 1]; // Ahead (toward head)
+                                    angle = Math.atan2(next.y - prev.y, next.x - prev.x);
+                                } else if (i > 0) {
+                                    const prev = snakePath[i - 1];
+                                    angle = Math.atan2(point.y - prev.y, point.x - prev.x);
+                                }
+                                
+                                // Draw the scale image rotated to match snake direction
+                                ctx.save();
+                                ctx.translate(point.x, point.y);
+                                // Rotate to match snake direction - new scales point right, so just use angle
+                                ctx.rotate(angle);
+                                
+                                // Draw the scale centered on this point
+                                ctx.drawImage(
+                                    scaleImg,
+                                    -scaleSize / 2,
+                                    -scaleSize / 2,
+                                    scaleSize,
+                                    scaleSize
+                                );
+                                
+                                ctx.restore();
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // ===== THIRD PASS: Draw HP numbers, head, and tail (always) =====
+            for (let segIdx = 0; segIdx < snakeSegments.length; segIdx++) {
+                const segment = snakeSegments[segIdx];
+                
+                const startI = Math.max(0, segment.startIndex);
+                const endI = Math.min(snakePath.length - 1, segment.endIndex);
+                
+                if (startI >= snakePath.length || endI < 0) continue;
+                
+                // Draw HP number
+                const midIdx = Math.floor((segment.startIndex + segment.endIndex) / 2);
+                if (midIdx < snakePath.length && midIdx >= 0) {
+                    const midPoint = snakePath[midIdx];
+                    
+                    ctx.fillStyle = 'white';
+                    ctx.font = `900 ${Math.floor(20 * scale)}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = 3 * scale;
+                    
+                    // Show bonus icon above HP for bonus segments
+                    if (segment.segmentType === SEGMENT_BONUS_FIRERATE) {
+                        ctx.strokeText('🔥', midPoint.x, midPoint.y - 18 * scale);
+                        ctx.fillStyle = '#44aaff';
+                        ctx.fillText('🔥', midPoint.x, midPoint.y - 18 * scale);
+                        ctx.fillStyle = 'white';
+                    } else if (segment.segmentType === SEGMENT_BONUS_GUN) {
+                        ctx.strokeText('🔫', midPoint.x, midPoint.y - 18 * scale);
+                        ctx.fillStyle = '#aa44ff';
+                        ctx.fillText('🔫', midPoint.x, midPoint.y - 18 * scale);
+                        ctx.fillStyle = 'white';
+                    }
+                    
+                    ctx.strokeText(segment.hp, midPoint.x, midPoint.y);
+                    ctx.fillText(segment.hp, midPoint.x, midPoint.y);
+                }
+                
+                // Draw head
+                if (segment.isHead && segment.startIndex < snakePath.length) {
+                    drawDragonHead(segment.startIndex, segment.colorBand);
+                }
+                
+                // Draw tail on the last segment - use the actual end of the snake path
+                if (segIdx === snakeSegments.length - 1 && snakePath.length > 20) {
+                    drawSnakeTail(snakePath.length - 1, segment.colorBand);
+                }
+            }
+        }
+        
+        // Dragon head using the snake_head.png image
+        function drawDragonHead(startIndex, colorBand) {
+            if (startIndex >= snakePath.length) return;
+            
+            // Skip if image not loaded
+            if (!snakeHeadImg.complete || snakeHeadImg.naturalWidth === 0) return;
+            
+            const headPoint = snakePath[startIndex];
+            let headAngle = 0;
+            
+            if (startIndex < snakePath.length - 3) {
+                const nextPoint = snakePath[startIndex + 3];
+                headAngle = Math.atan2(headPoint.y - nextPoint.y, headPoint.x - nextPoint.x);
+            }
+            
+            // The snake_head.png image faces 230 degrees, convert to radians
+            const imageBaseAngle = 230 * (Math.PI / 180);
+            
+            // Additional rotation adjustment (85 degrees CCW)
+            const headRotationAdjust = -85 * (Math.PI / 180);
+            
+            // Size of the head
+            const headSize = getSnakeWidth() * 2.2;
+            
+            ctx.save();
+            ctx.translate(headPoint.x, headPoint.y);
+            // Rotate: subtract the image's base angle so it aligns with snake direction
+            ctx.rotate(headAngle - imageBaseAngle + Math.PI + headRotationAdjust);
+            
+            // Draw the head image centered on the point, slightly forward
+            ctx.drawImage(
+                snakeHeadImg,
+                -headSize / 2,
+                -headSize / 2,
+                headSize,
+                headSize
+            );
+            
+            ctx.restore();
+        }
+        
+        // Snake tail built from progressively smaller scales
+        // The tail extends BEYOND the snake body, continuing along the spiral
+        function drawSnakeTail(endIndex, colorBand) {
+            if (endIndex < 20 || endIndex >= snakePath.length) return;
+
+            // Skip if image not loaded
+            if (!yellowTailScaleImg.complete || yellowTailScaleImg.naturalWidth === 0) return;
+
+            const tailScaleCount = 14;
+            const snakeW = getSnakeWidth();
+            const baseScaleSize = snakeW * 1.1;
+
+            // The tail continues along the spiral BEYOND the current snake path
+            // Get the angle offset of the last point in the path
+            const lastPathPoint = snakePath[endIndex];
+            const lastOffset = lastPathPoint.offset;
+
+            // Build tail positions by continuing along the spiral beyond the snake body
+            const tailPositions = [];
+            for (let i = 0; i < tailScaleCount; i++) {
+                // Each tail scale is further along the spiral (larger offset = further from head)
+                const tailOffset = lastOffset + (i + 1) * anglePerPoint * 1.2;
+                const tailAngle = snakeAngle + tailOffset;
+                const pos = getSpiralPosition(tailAngle);
+
+                // Get angle for rotation by looking at the spiral tangent
+                const nextOffset = tailOffset + anglePerPoint;
+                const nextAngle = snakeAngle + nextOffset;
+                const nextPos = getSpiralPosition(nextAngle);
+                const rotation = Math.atan2(nextPos.y - pos.y, nextPos.x - pos.x);
+
+                tailPositions.push({
+                    x: pos.x,
+                    y: pos.y,
+                    angle: rotation
+                });
+            }
+
+            // Draw from tip toward body (so body-side scales overlap tip-side)
+            for (let i = tailScaleCount - 1; i >= 0; i--) {
+                const pos = tailPositions[i];
+
+                // First 2 scales (i=0, i=1) are full size, rest taper toward tip
+                let sizeMultiplier;
+                if (i <= 1) {
+                    sizeMultiplier = 1.0;
+                } else {
+                    // Taper from full size at i=2 down to small at the end
+                    const progress = (i - 2) / (tailScaleCount - 3);
+                    sizeMultiplier = 1.0 - (progress * 0.8);
+                }
+
+                const scaleSize = baseScaleSize * sizeMultiplier;
+
+                ctx.save();
+                ctx.translate(pos.x, pos.y);
+                ctx.rotate(pos.angle);
+
+                ctx.drawImage(
+                    yellowTailScaleImg,
+                    -scaleSize / 2,
+                    -scaleSize / 2,
+                    scaleSize,
+                    scaleSize
+                );
+
+                ctx.restore();
+            }
+        }
+        
+        function drawGuns() {
+            const platformR = getPlatformRadius();
+            
+            // Platform
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, platformR, 0, Math.PI * 2);
+            const platformGrad = ctx.createRadialGradient(centerX - 10 * scale, centerY - 10 * scale, 0, centerX, centerY, platformR);
+            platformGrad.addColorStop(0, '#c4a574');
+            platformGrad.addColorStop(0.5, '#8b7355');
+            platformGrad.addColorStop(1, '#5d4e37');
+            ctx.fillStyle = platformGrad;
+            ctx.fill();
+            ctx.strokeStyle = '#3d2e17';
+            ctx.lineWidth = 3 * scale;
+            ctx.stroke();
+            
+            // Platform details
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, platformR * 0.7, 0, Math.PI * 2);
+            ctx.strokeStyle = '#4d3e27';
+            ctx.lineWidth = 2 * scale;
+            ctx.stroke();
+            
+            for (const gun of guns) {
+                ctx.save();
+                ctx.translate(gun.x, gun.y);
+                ctx.rotate(gun.angle);
+                ctx.scale(scale, scale);
+                
+                // Gun mount
+                ctx.beginPath();
+                ctx.arc(0, 0, 8, 0, Math.PI * 2);
+                ctx.fillStyle = '#666';
+                ctx.fill();
+                ctx.strokeStyle = '#444';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Gun body
+                ctx.fillStyle = '#555';
+                ctx.fillRect(-4, -5, 18, 10);
+                
+                // Barrel
+                ctx.fillStyle = '#444';
+                ctx.fillRect(10, -3, 16, 6);
+                
+                // Barrel details
+                ctx.fillStyle = '#333';
+                ctx.fillRect(22, -4, 5, 8);
+                
+                // Highlight
+                ctx.fillStyle = '#777';
+                ctx.fillRect(-2, -4, 14, 2);
+                
+                ctx.restore();
+            }
+        }
+        
+        function drawBullets() {
+            const bulletRadius = 4 * scale;
+            for (const bullet of bullets) {
+                // Bullet trail
+                ctx.beginPath();
+                ctx.moveTo(bullet.x, bullet.y);
+                ctx.lineTo(bullet.x - bullet.vx * 0.5, bullet.y - bullet.vy * 0.5);
+                ctx.strokeStyle = 'rgba(255, 200, 0, 0.5)';
+                ctx.lineWidth = 3 * scale;
+                ctx.stroke();
+                
+                // Bullet
+                ctx.beginPath();
+                ctx.arc(bullet.x, bullet.y, bulletRadius, 0, Math.PI * 2);
+                const bulletGrad = ctx.createRadialGradient(bullet.x, bullet.y, 0, bullet.x, bullet.y, bulletRadius);
+                bulletGrad.addColorStop(0, '#ffffff');
+                bulletGrad.addColorStop(0.4, '#ffff00');
+                bulletGrad.addColorStop(1, '#ff8800');
+                ctx.fillStyle = bulletGrad;
+                ctx.fill();
+                
+                // Glow
+                ctx.shadowColor = '#ffaa00';
+                ctx.shadowBlur = 10 * scale;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+        }
+        
+        function drawParticles() {
+            for (const p of particles) {
+                ctx.globalAlpha = p.life / 40;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, (3 + (1 - p.life/40) * 3) * scale, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+            
+            ctx.font = `bold ${Math.floor(16 * scale)}px Arial`;
+            ctx.textAlign = 'center';
+            for (const d of damageNumbers) {
+                ctx.globalAlpha = d.life / 25;
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 3 * scale;
+                ctx.strokeText(`-${d.value}`, d.x, d.y);
+                ctx.fillStyle = '#ffff44';
+                ctx.fillText(`-${d.value}`, d.x, d.y);
+            }
+            ctx.globalAlpha = 1;
+        }
+        
+        function drawCrosshair() {
+            // Aiming line from center to cursor
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(mouseX, mouseY);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 2 * scale;
+            ctx.setLineDash([8 * scale, 8 * scale]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Crosshair at mouse position
+            const size = 12 * scale;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.lineWidth = 2 * scale;
+            
+            // Outer circle
+            ctx.beginPath();
+            ctx.arc(mouseX, mouseY, size, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Cross lines
+            ctx.beginPath();
+            ctx.moveTo(mouseX - size - 4 * scale, mouseY);
+            ctx.lineTo(mouseX - size + 6 * scale, mouseY);
+            ctx.moveTo(mouseX + size - 6 * scale, mouseY);
+            ctx.lineTo(mouseX + size + 4 * scale, mouseY);
+            ctx.moveTo(mouseX, mouseY - size - 4 * scale);
+            ctx.lineTo(mouseX, mouseY - size + 6 * scale);
+            ctx.moveTo(mouseX, mouseY + size - 6 * scale);
+            ctx.lineTo(mouseX, mouseY + size + 4 * scale);
+            ctx.stroke();
+            
+            // Center dot
+            ctx.beginPath();
+            ctx.arc(mouseX, mouseY, 2.5 * scale, 0, Math.PI * 2);
+            ctx.fillStyle = '#ff4444';
+            ctx.fill();
+        }
+        
+        function drawBackground() {
+            // Sky gradient at top
+            const skyHeight = 100 * scale;
+            const skyGrad = ctx.createLinearGradient(0, 0, 0, skyHeight);
+            skyGrad.addColorStop(0, '#87ceeb');
+            skyGrad.addColorStop(1, '#98d977');
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(0, 0, canvasWidth, skyHeight);
+            
+            // Grass
+            const maxR = Math.max(canvasWidth, canvasHeight);
+            const grassGrad = ctx.createRadialGradient(centerX, centerY, getSpiralBase(), centerX, centerY, maxR);
+            grassGrad.addColorStop(0, '#6aaf35');
+            grassGrad.addColorStop(0.3, '#5a9f25');
+            grassGrad.addColorStop(0.7, '#4a8f15');
+            grassGrad.addColorStop(1, '#3a7f05');
+            ctx.fillStyle = grassGrad;
+            ctx.fillRect(0, skyHeight * 0.7, canvasWidth, canvasHeight - skyHeight * 0.7);
+            
+            // Grass texture hints
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 2 * scale;
+            for (let i = 0; i < 30; i++) {
+                const gx = Math.random() * canvasWidth;
+                const gy = skyHeight + Math.random() * (canvasHeight - skyHeight);
+                ctx.beginPath();
+                ctx.moveTo(gx, gy);
+                ctx.lineTo(gx + (Math.random() - 0.5) * 8 * scale, gy - (8 + Math.random() * 8) * scale);
+                ctx.stroke();
+            }
+            
+            // Path hint (spiral track)
+            ctx.strokeStyle = 'rgba(139, 115, 85, 0.45)';
+            ctx.lineWidth = getSnakeWidth() + 10 * scale;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            for (let a = 0; a < Math.PI * 12; a += 0.1) {
+                const r = getSpiralBase() + a * getSpiralGrowth();
+                if (r > maxR) break;
+                const x = centerX + Math.cos(a) * r;
+                const y = centerY + Math.sin(a) * r;
+                if (a === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+        
+        function gameLoop() {
+            if (gameState === 'playing') {
+                updateSnake();
+                updateGuns();
+                updateBullets();
+                updateParticles();
+            }
+            
+            drawBackground();
+            drawSnakeBody();
+            drawGuns();
+            drawBullets();
+            drawParticles();
+            
+            if (gameState === 'playing') {
+                drawCrosshair();
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function startGame() {
+            gameState = 'playing';
+            score = 0;
+            level = 1;
+            snakeSpeed = 0.15;
+            bullets = [];
+            particles = [];
+            damageNumbers = [];
+            
+            // Reset all power-ups
+            bonusGuns = 0;
+            fireRateBonus = 0;
+            
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            document.getElementById('winScreen').classList.add('hidden');
+            
+            initSnake();
+            initGuns();
+            updateUI();
+        }
+        
+        function levelComplete() {
+            if (level >= maxLevel) {
+                winGame();
+                return;
+            }
+            
+            level++;
+            snakeSpeed += 0.015;
+            
+            const indicator = document.getElementById('levelIndicator');
+            indicator.textContent = `Level ${level}`;
+            indicator.style.opacity = 1;
+            
+            setTimeout(() => {
+                indicator.style.opacity = 0;
+                initSnake();
+                initGuns();
+                updateUI();
+            }, 1500);
+        }
+        
+        function gameOver() {
+            gameState = 'gameover';
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('finalLevel').textContent = level;
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+        }
+        
+        function winGame() {
+            gameState = 'win';
+            document.getElementById('winScore').textContent = score;
+            document.getElementById('winScreen').classList.remove('hidden');
+        }
+        
+        function updateUI() {
+            document.getElementById('scoreDisplay').textContent = `Score: ${score}`;
+            document.getElementById('levelDisplay').textContent = `Level: ${level}`;
+        }
+        
+        document.getElementById('startBtn').addEventListener('click', startGame);
+        document.getElementById('restartBtn').addEventListener('click', startGame);
+        document.getElementById('playAgainBtn').addEventListener('click', startGame);
+        
+        // Helper to convert screen coordinates to canvas coordinates
+        function getCanvasCoords(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvasWidth / rect.width;
+            const scaleY = canvasHeight / rect.height;
+            return {
+                x: (clientX - rect.left) * scaleX,
+                y: (clientY - rect.top) * scaleY
+            };
+        }
+        
+        // Mouse controls
+        canvas.addEventListener('mousemove', (e) => {
+            const coords = getCanvasCoords(e.clientX, e.clientY);
+            mouseX = coords.x;
+            mouseY = coords.y;
+        });
+        
+        canvas.addEventListener('mousedown', (e) => {
+            isPointerDown = true;
+        });
+        
+        canvas.addEventListener('mouseup', (e) => {
+            isPointerDown = false;
+        });
+        
+        canvas.addEventListener('mouseleave', (e) => {
+            isPointerDown = false;
+        });
+        
+        // Touch controls - use passive: false to allow preventDefault
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isPointerDown = true;
+            const touch = e.touches[0];
+            const coords = getCanvasCoords(touch.clientX, touch.clientY);
+            mouseX = coords.x;
+            mouseY = coords.y;
+        }, { passive: false });
+        
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const coords = getCanvasCoords(touch.clientX, touch.clientY);
+            mouseX = coords.x;
+            mouseY = coords.y;
+        }, { passive: false });
+        
+        canvas.addEventListener('touchend', (e) => {
+            isPointerDown = false;
+        });
+        
+        // Prevent context menu on right-click
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+        
+        gameLoop();
+    </script>
+</body>
+</html>
