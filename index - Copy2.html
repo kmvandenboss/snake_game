@@ -161,7 +161,6 @@
         
         <div id="ui">
             <span id="scoreDisplay">Score: 0</span>
-            <span id="livesDisplay">❤️❤️❤️</span>
             <span id="levelDisplay">Level: 1</span>
             <span id="gunsDisplay">Guns: 1</span>
         </div>
@@ -186,7 +185,6 @@
         
         <div id="gameOverScreen" class="hidden">
             <h1>💀 GAME OVER 💀</h1>
-            <p class="subtitle">All lives lost!</p>
             <p class="stats">Final Score: <span id="finalScore">0</span></p>
             <p class="stats">Level Reached: <span id="finalLevel">1</span></p>
             <button id="restartBtn">PLAY AGAIN</button>
@@ -279,14 +277,6 @@
         let score = 0;
         let level = startLevel;
         const maxLevel = 10;
-
-        // Lives system
-        let lives = 3;
-        let levelStartState = {
-            score: 0,
-            fireRateBonus: 0,
-            bonusGuns: 0
-        };
         
         // Responsive sizing - these get set by resizeCanvas()
         let canvasWidth, canvasHeight;
@@ -492,44 +482,28 @@
 
             let currentIndex = headBufferPoints; // Start first segment after the head
             let segmentNumber = 0;
-            let quickWinCount = 0; // Track how many quick win segments we've created
 
             while (currentIndex < snakePath.length - 10) {
                 let segmentType = SEGMENT_NORMAL;
                 let segmentLength;
                 let hp;
-                let isQuickWin = false; // Track if this segment is a quick win
 
                 if (segmentNumber === 0) {
                     // HEAD SEGMENT: Short but high HP - tough to kill!
                     segmentLength = 15 + Math.floor(Math.random() * 5);
-                    // Level 1: Reduced HP for head segment to make it more beatable
-                    if (level === 1) {
-                        hp = Math.floor(baseHP * 1.2) + level * 10;
-                    } else {
-                        hp = Math.floor(baseHP * 2) + level * 20;
-                    }
+                    hp = Math.floor(baseHP * 2) + level * 20;
                 } else if (segmentNumber < 3) {
                     // First few segments near head: Short, moderate-high HP
                     segmentLength = 18 + Math.floor(Math.random() * 8);
-                    // Level 1: Reduced HP for early segments
-                    if (level === 1) {
-                        hp = Math.floor(baseHP * 0.9) + level * 6;
-                    } else {
-                        hp = Math.floor(baseHP * 1.5) + level * 12;
-                    }
+                    hp = Math.floor(baseHP * 1.5) + level * 12;
                 } else {
                     // Rest of snake: Random variety
                     const roll = Math.random();
-
-                    // Level 1: Force extra quick win segments (at least 2 total in first 6 segments)
-                    const forceQuickWin = level === 1 && quickWinCount < 2 && segmentNumber >= 3 && segmentNumber <= 5 && (segmentNumber === 5 || roll < 0.5);
-
-                    if (roll < 0.18 || forceQuickWin) {
+                    
+                    if (roll < 0.18) {
                         // QUICK WIN: Long segment with LOW HP - satisfying to destroy!
                         segmentLength = 50 + Math.floor(Math.random() * 30);
                         hp = Math.floor(baseHP * 0.4) + Math.floor(Math.random() * 6);
-                        isQuickWin = true;
                     } else if (roll < 0.22 && level >= 2) {
                         // BONUS: Fire rate boost segment (glowing blue) - reduced from 6% to 4%
                         segmentType = SEGMENT_BONUS_FIRERATE;
@@ -568,12 +542,7 @@
                     segmentType: segmentType,
                     hitFlash: 0 // Timer for hit flash effect (10 frames max)
                 });
-
-                // Track quick win segments for level 1 balancing
-                if (isQuickWin) {
-                    quickWinCount++;
-                }
-
+                
                 currentIndex = endIndex;
                 segmentNumber++;
             }
@@ -1778,22 +1747,14 @@
             gameState = 'playing';
             score = 0;
             level = 1;
-            lives = 3;
             snakeSpeed = 0.15;
             bullets = [];
             particles = [];
             damageNumbers = [];
-
+            
             // Reset all power-ups (apply startGuns from URL param)
             bonusGuns = startGuns;
             fireRateBonus = 0;
-
-            // Save level start state
-            levelStartState = {
-                score: score,
-                fireRateBonus: fireRateBonus,
-                bonusGuns: bonusGuns
-            };
 
             // Reset goat
             goat = null;
@@ -1806,7 +1767,7 @@
             document.getElementById('startScreen').classList.add('hidden');
             document.getElementById('gameOverScreen').classList.add('hidden');
             document.getElementById('winScreen').classList.add('hidden');
-
+            
             initSnake();
             initGuns();
             updateUI();
@@ -1817,22 +1778,15 @@
                 winGame();
                 return;
             }
-
+            
             level++;
             snakeSpeed += 0.03; // Increased speed scaling per level
             backgroundNeedsRedraw = true; // Redraw background for new theme
 
-            // Save level start state for the new level
-            levelStartState = {
-                score: score,
-                fireRateBonus: fireRateBonus,
-                bonusGuns: bonusGuns
-            };
-
             const indicator = document.getElementById('levelIndicator');
             indicator.textContent = `Level ${level}`;
             indicator.style.opacity = 1;
-
+            
             setTimeout(() => {
                 indicator.style.opacity = 0;
                 initSnake();
@@ -1842,53 +1796,10 @@
         }
         
         function gameOver() {
-            if (lives > 0) {
-                // Lose a life
-                lives--;
-
-                if (lives > 0) {
-                    // Still have lives - restart the level
-                    gameState = 'restarting'; // Pause game during restart
-
-                    // Restore state from level start
-                    score = levelStartState.score;
-                    fireRateBonus = levelStartState.fireRateBonus;
-                    bonusGuns = levelStartState.bonusGuns;
-
-                    // Clear current game objects
-                    bullets = [];
-                    particles = [];
-                    damageNumbers = [];
-                    goat = null;
-                    nextGoatThreshold = 1;
-                    minAngleReached = Infinity;
-
-                    // Show life lost notification
-                    const indicator = document.getElementById('levelIndicator');
-                    indicator.textContent = `💔 -1 Life! Restarting Level ${level}`;
-                    indicator.style.color = '#ff6666';
-                    indicator.style.opacity = 1;
-
-                    // Update UI immediately to show lost life
-                    updateUI();
-
-                    setTimeout(() => {
-                        indicator.style.opacity = 0;
-                        indicator.style.color = 'white';
-                        initSnake();
-                        initGuns();
-                        updateUI();
-                        gameState = 'playing'; // Resume game
-                    }, 1500);
-                } else {
-                    // No lives left - true game over
-                    gameState = 'gameover';
-                    document.getElementById('finalScore').textContent = score;
-                    document.getElementById('finalLevel').textContent = level;
-                    document.getElementById('gameOverScreen').classList.remove('hidden');
-                    updateUI();
-                }
-            }
+            gameState = 'gameover';
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('finalLevel').textContent = level;
+            document.getElementById('gameOverScreen').classList.remove('hidden');
         }
         
         function winGame() {
@@ -1900,8 +1811,6 @@
         function updateUI() {
             document.getElementById('scoreDisplay').textContent = `Score: ${score}`;
             document.getElementById('levelDisplay').textContent = `Level: ${level}`;
-            // Update lives display with hearts
-            document.getElementById('livesDisplay').textContent = '❤️'.repeat(lives) + '🖤'.repeat(3 - lives);
         }
         
         document.getElementById('startBtn').addEventListener('click', startGame);
