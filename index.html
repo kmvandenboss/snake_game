@@ -336,6 +336,13 @@
         // Effects
         let particles = [];
         let damageNumbers = [];
+
+        // Goat bonus system
+        let goat = null; // { angle, hp, maxHp, x, y, hitFlash }
+        let goatSpawnedThisLevel = false; // Only one goat per level
+        let minAngleReached = Infinity; // Track how close snake got to center
+        const GOAT_TRIGGER_ANGLE = 4.5; // Snake must be pushed back far before goat can spawn
+        const GOAT_SPAWN_OFFSET = 0.70; // How far ahead of snake (toward center) the goat spawns
         
         // Spiral constants
         const anglePerPoint = 0.025; // Angular spacing between path points
@@ -377,9 +384,14 @@
         function initSnake() {
             snakePath = [];
             snakeSegments = [];
-            
+
             // Reset fire rate bonus for new level (guns persist)
             fireRateBonus = 0;
+
+            // Reset goat for new level
+            goat = null;
+            goatSpawnedThisLevel = false;
+            minAngleReached = Infinity;
             
             // MUCH longer snake - fills entire visible path and extends off-screen
             const pathLength = 800 + level * 100;
@@ -408,6 +420,31 @@
             createVariableSegments();
         }
         
+        function calculateGoatHP() {
+            const baseHP = 18 + level * 18;
+            return Math.floor(baseHP * 1.8) + Math.floor(Math.random() * (level * 6));
+        }
+
+        function spawnGoat() {
+            if (goat) return; // Already active
+
+            const hp = calculateGoatHP();
+            // Goat appears AHEAD of the snake (lower angle = closer to center)
+            const goatAngle = snakeAngle - GOAT_SPAWN_OFFSET;
+            const pos = getSpiralPosition(goatAngle);
+
+            goat = {
+                angle: goatAngle,
+                hp: hp,
+                maxHp: hp,
+                x: pos.x,
+                y: pos.y,
+                hitFlash: 0
+            };
+
+            showPowerUpNotification('GOAT APPEARED!', '#88ff88');
+        }
+
         function createVariableSegments() {
             const baseHP = 18 + level * 18; // Higher HP scaling per level
 
@@ -540,6 +577,36 @@
             // Update ALL positions based on the spiral formula
             updateSnakePositions();
             
+            // Update goat position and check for snake eating it
+            if (goat) {
+                const goatPos = getSpiralPosition(goat.angle);
+                goat.x = goatPos.x;
+                goat.y = goatPos.y;
+
+                // Check if snake head reached the goat (snake moves toward lower angles)
+                // Trigger when front of head covers the goat (not back of head)
+                // The head extends forward, so we check against a larger offset
+                if (snakeAngle <= goat.angle + 0.15) {
+                    snakeEatsGoat();
+                }
+            }
+
+            // Track how close the snake has gotten to the center
+            if (snakeAngle < minAngleReached) {
+                minAngleReached = snakeAngle;
+            }
+
+            // Check if we should spawn a goat:
+            // - Snake must have gotten close to center first (below trigger threshold)
+            // - Then been pushed BACK past the trigger threshold
+            // - Only once per level
+            if (!goat && !goatSpawnedThisLevel &&
+                minAngleReached < GOAT_TRIGGER_ANGLE &&
+                snakeAngle >= GOAT_TRIGGER_ANGLE) {
+                spawnGoat();
+                goatSpawnedThisLevel = true;
+            }
+
             // Check if head reached center (using scaled values)
             const headRadius = getSpiralRadius(snakeAngle);
             if (headRadius < getPlatformRadius() + 15 * scale) {
@@ -547,6 +614,69 @@
             }
         }
         
+        function snakeEatsGoat() {
+            if (!goat) return;
+
+            // Calculate segment length for MEDIUM segment
+            const segmentLength = 25 + Math.floor(Math.random() * 15);
+
+            // Get the current last point's offset to continue from
+            const lastOffset = snakePath.length > 0
+                ? snakePath[snakePath.length - 1].offset
+                : 0;
+
+            // Add new path points at the END of the snake (tail)
+            for (let i = 1; i <= segmentLength; i++) {
+                snakePath.push({
+                    offset: lastOffset + i * anglePerPoint,
+                    x: 0,
+                    y: 0
+                });
+            }
+
+            // Create the new segment at the tail
+            const lastSegment = snakeSegments[snakeSegments.length - 1];
+            const newSegment = {
+                startIndex: lastSegment ? lastSegment.endIndex : 0,
+                endIndex: snakePath.length,
+                hp: goat.hp, // HP equals goat's remaining HP
+                maxHp: goat.hp,
+                colorBand: lastSegment ? (lastSegment.colorBand + 1) % 2 : 0,
+                isHead: false,
+                segmentType: SEGMENT_NORMAL,
+                hitFlash: 0
+            };
+
+            snakeSegments.push(newSegment);
+
+            // Move snake head FORWARD (toward center) by the segment length
+            // This is the key mechanic - eating the goat pulls the snake forward!
+            snakeAngle -= segmentLength * anglePerPoint;
+
+            // Update positions
+            updateSnakePositions();
+
+            // Show notification
+            showPowerUpNotification(`GOAT EATEN! +${goat.hp} HP`, '#88ff88');
+
+            // Particle effect at goat position
+            for (let i = 0; i < 30; i++) {
+                const angle = (i / 30) * Math.PI * 2;
+                const speed = 5 + Math.random() * 8;
+                particles.push({
+                    x: goat.x,
+                    y: goat.y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 40,
+                    color: ['#ffffff', '#88ff88', '#ffff88', '#ff8888'][i % 4]
+                });
+            }
+
+            // Clear the goat
+            goat = null;
+        }
+
         function getSegmentAtIndex(pathIndex) {
             for (let i = 0; i < snakeSegments.length; i++) {
                 const seg = snakeSegments[i];
@@ -600,18 +730,22 @@
                 gun.angle = aimAngle;
             }
             
-            // Auto-fire while playing - fireRateBonus reduces wait time
+            // Fire rate depends on whether holding mouse/touch
+            // Holding = fast fire, not holding = slow auto-fire
             globalFireTimer--;
-            const effectiveFireRate = Math.max(6, fireRate - fireRateBonus); // Min 6 frames between shots
+            const fastFireRate = Math.max(6, fireRate - fireRateBonus); // Fast when holding
+            const slowFireRate = fastFireRate * 3; // 3x slower when not holding
+            const effectiveFireRate = isPointerDown ? fastFireRate : slowFireRate;
+
             if (globalFireTimer <= 0) {
                 globalFireTimer = effectiveFireRate;
-                
+
                 // Each gun fires with slight spread for multi-gun effect
                 const gunCount = guns.length;
                 guns.forEach((gun, index) => {
                     // Spread guns evenly if multiple
-                    const spreadOffset = gunCount > 1 
-                        ? (index - (gunCount - 1) / 2) * 0.08 
+                    const spreadOffset = gunCount > 1
+                        ? (index - (gunCount - 1) / 2) * 0.08
                         : 0;
                     fireBullet(gun, spreadOffset);
                 });
@@ -677,6 +811,58 @@
 
                     if (segInfo.segment.hp <= 0) {
                         destroySegment(segInfo.index);
+                    }
+                }
+
+                // Check goat hit
+                if (!hit && goat) {
+                    const dx = bullet.x - goat.x;
+                    const dy = bullet.y - goat.y;
+                    const goatHitRadius = 25 * scale;
+                    if (dx * dx + dy * dy < goatHitRadius * goatHitRadius) {
+                        goat.hp -= bullet.damage;
+                        goat.hitFlash = 10;
+                        hit = true;
+
+                        damageNumbers.push({
+                            x: bullet.x + (Math.random() - 0.5) * 20,
+                            y: bullet.y,
+                            value: bullet.damage,
+                            life: 25,
+                            vy: -3
+                        });
+
+                        // Particles
+                        for (let k = 0; k < 8; k++) {
+                            particles.push({
+                                x: bullet.x,
+                                y: bullet.y,
+                                vx: (Math.random() - 0.5) * 12,
+                                vy: (Math.random() - 0.5) * 12,
+                                life: 25,
+                                color: ['#ffffff', '#cccccc', '#aaaaaa', '#888888'][k % 4]
+                            });
+                        }
+
+                        // If goat HP reaches 0, destroy it
+                        if (goat.hp <= 0) {
+                            score += goat.maxHp * 5; // Bonus score for killing goat
+                            document.getElementById('scoreDisplay').textContent = `Score: ${score}`;
+                            showPowerUpNotification('GOAT DESTROYED!', '#ff8844');
+
+                            // Big particle explosion
+                            for (let i = 0; i < 40; i++) {
+                                particles.push({
+                                    x: goat.x,
+                                    y: goat.y,
+                                    vx: (Math.random() - 0.5) * 15,
+                                    vy: (Math.random() - 0.5) * 15,
+                                    life: 40,
+                                    color: ['#ffffff', '#ffcc00', '#ff8800', '#ff4400'][i % 4]
+                                });
+                            }
+                            goat = null;
+                        }
                     }
                 }
 
@@ -793,6 +979,11 @@
                 if (segment.hitFlash > 0) {
                     segment.hitFlash--;
                 }
+            }
+
+            // Update goat hit flash
+            if (goat && goat.hitFlash > 0) {
+                goat.hitFlash--;
             }
         }
         
@@ -991,27 +1182,64 @@
                 }
             }
 
-            // ===== FOURTH PASS: Draw HP numbers, head, and tail (always) =====
+            // ===== FOURTH PASS: Draw HP numbers, goat, head, and tail (always) =====
+
+            // Draw goat BEFORE head so snake head appears on top
+            if (goat) {
+                ctx.save();
+
+                // Glow effect (pulsing)
+                const pulseIntensity = 0.4 + 0.3 * Math.sin(Date.now() / 200);
+                ctx.shadowColor = '#88ff88';
+                ctx.shadowBlur = 20 * scale * pulseIntensity;
+
+                // Draw goat emoji
+                ctx.font = `${Math.floor(40 * scale)}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('\u{1F410}', goat.x, goat.y);
+
+                // Draw HP below goat
+                ctx.shadowBlur = 0;
+                ctx.font = `900 ${Math.floor(18 * scale)}px Arial`;
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 3 * scale;
+                ctx.strokeText(goat.hp, goat.x, goat.y + 30 * scale);
+                ctx.fillStyle = '#88ff88';
+                ctx.fillText(goat.hp, goat.x, goat.y + 30 * scale);
+
+                // Hit flash effect
+                if (goat.hitFlash > 0) {
+                    ctx.globalAlpha = goat.hitFlash / 10;
+                    ctx.fillStyle = 'white';
+                    ctx.font = `${Math.floor(44 * scale)}px Arial`;
+                    ctx.fillText('\u{1F410}', goat.x, goat.y);
+                    ctx.globalAlpha = 1;
+                }
+
+                ctx.restore();
+            }
+
             for (let segIdx = 0; segIdx < snakeSegments.length; segIdx++) {
                 const segment = snakeSegments[segIdx];
-                
+
                 const startI = Math.max(0, segment.startIndex);
                 const endI = Math.min(snakePath.length - 1, segment.endIndex);
-                
+
                 if (startI >= snakePath.length || endI < 0) continue;
-                
+
                 // Draw HP number
                 const midIdx = Math.floor((segment.startIndex + segment.endIndex) / 2);
                 if (midIdx < snakePath.length && midIdx >= 0) {
                     const midPoint = snakePath[midIdx];
-                    
+
                     ctx.fillStyle = 'white';
                     ctx.font = `900 ${Math.floor(20 * scale)}px Arial`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.strokeStyle = 'black';
                     ctx.lineWidth = 3 * scale;
-                    
+
                     // Show bonus icon above HP for bonus segments
                     if (segment.segmentType === SEGMENT_BONUS_FIRERATE) {
                         ctx.strokeText('🔥', midPoint.x, midPoint.y - 18 * scale);
@@ -1024,23 +1252,23 @@
                         ctx.fillText('🔫', midPoint.x, midPoint.y - 18 * scale);
                         ctx.fillStyle = 'white';
                     }
-                    
+
                     ctx.strokeText(segment.hp, midPoint.x, midPoint.y);
                     ctx.fillText(segment.hp, midPoint.x, midPoint.y);
                 }
-                
+
                 // Draw head - always at index 0 (the actual head position)
                 if (segment.isHead) {
                     drawDragonHead(0, segment.colorBand);
                 }
-                
+
                 // Draw tail on the last segment - use the actual end of the snake path
                 if (segIdx === snakeSegments.length - 1 && snakePath.length > 20) {
                     drawSnakeTail(snakePath.length - 1, segment.colorBand);
                 }
             }
         }
-        
+
         // Dragon head using the snake_head.png image
         function drawDragonHead(startIndex, colorBand) {
             if (startIndex >= snakePath.length) return;
@@ -1382,7 +1610,12 @@
             // Reset all power-ups
             bonusGuns = 0;
             fireRateBonus = 0;
-            
+
+            // Reset goat
+            goat = null;
+            goatSpawnedThisLevel = false;
+            minAngleReached = Infinity;
+
             document.getElementById('startScreen').classList.add('hidden');
             document.getElementById('gameOverScreen').classList.add('hidden');
             document.getElementById('winScreen').classList.add('hidden');
