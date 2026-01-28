@@ -321,7 +321,7 @@
         function getSnakeWidth() { return 36 * scale; }
         function getPlatformRadius() { return 45 * scale; }
         function getSpiralBase() { return 55 * scale; }
-        function getSpiralGrowth() { return 20 * scale; }
+        function getSpiralGrowth() { return 12 * scale; } // Reduced from 20 to 12 for tighter coils
         
         let snakeSpeed = 0.15;
         let snakeAngle = 0;
@@ -409,14 +409,19 @@
         
         function createVariableSegments() {
             const baseHP = 18 + level * 10; // Much higher base HP
-            let currentIndex = 0;
+
+            // Buffer zone for the head - the first segment starts after this
+            // This ensures the head doesn't cover the HP number and segment
+            const headBufferPoints = 20; // Number of path points the head covers
+
+            let currentIndex = headBufferPoints; // Start first segment after the head
             let segmentNumber = 0;
-            
+
             while (currentIndex < snakePath.length - 10) {
                 let segmentType = SEGMENT_NORMAL;
                 let segmentLength;
                 let hp;
-                
+
                 if (segmentNumber === 0) {
                     // HEAD SEGMENT: Short but VERY high HP - tough to kill!
                     segmentLength = 15 + Math.floor(Math.random() * 5);
@@ -779,7 +784,7 @@
             
             for (let segIdx = snakeSegments.length - 1; segIdx >= 0; segIdx--) {
                 const segment = snakeSegments[segIdx];
-                
+
                 // Use bonus colors if it's a bonus segment, otherwise use normal colors
                 let colors;
                 if (segment.segmentType && bonusColors[segment.segmentType]) {
@@ -787,10 +792,12 @@
                 } else {
                     colors = baseColors[segment.colorBand];
                 }
-                
-                const startI = Math.max(0, segment.startIndex);
+
+                // For the first segment (head segment), always draw from index 0 to avoid gap
+                // This fills the space under the head visually
+                const startI = segment.isHead ? 0 : Math.max(0, segment.startIndex);
                 const endI = Math.min(snakePath.length - 1, segment.endIndex);
-                
+
                 if (startI >= snakePath.length || endI < 0) continue;
                 
                 // Draw the solid tube body
@@ -841,9 +848,10 @@
                 
                 // Only draw scales if image is loaded
                 if (scaleImg.complete && scaleImg.naturalWidth > 0) {
-                    const startI = Math.max(0, segment.startIndex);
+                    // For the first segment (head segment), always draw from index 0 to avoid gap
+                    const startI = segment.isHead ? 0 : Math.max(0, segment.startIndex);
                     const endI = Math.min(snakePath.length - 1, segment.endIndex);
-                    
+
                     if (startI < snakePath.length && endI >= 0) {
                         // Draw scales along this segment - from start to end (head to tail direction)
                         // This way each scale overlaps the one behind it
@@ -936,9 +944,9 @@
                     ctx.fillText(segment.hp, midPoint.x, midPoint.y);
                 }
                 
-                // Draw head
-                if (segment.isHead && segment.startIndex < snakePath.length) {
-                    drawDragonHead(segment.startIndex, segment.colorBand);
+                // Draw head - always at index 0 (the actual head position)
+                if (segment.isHead) {
+                    drawDragonHead(0, segment.colorBand);
                 }
                 
                 // Draw tail on the last segment - use the actual end of the snake path
@@ -963,11 +971,11 @@
                 headAngle = Math.atan2(headPoint.y - nextPoint.y, headPoint.x - nextPoint.x);
             }
             
-            // The snake_head.png image faces 230 degrees, convert to radians
-            const imageBaseAngle = 230 * (Math.PI / 180);
-            
-            // Additional rotation adjustment (85 degrees CCW)
-            const headRotationAdjust = -85 * (Math.PI / 180);
+            // The snake_head.png image faces 180 degrees (straight down), convert to radians
+            const imageBaseAngle = 180 * (Math.PI / 180);
+
+            // Rotate 90 degrees counterclockwise to align properly
+            const headRotationAdjust = -90 * (Math.PI / 180);
             
             // Size of the head
             const headSize = getSnakeWidth() * 2.2;
