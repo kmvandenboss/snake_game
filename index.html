@@ -435,11 +435,11 @@
                     // Rest of snake: Random variety
                     const roll = Math.random();
                     
-                    if (roll < 0.10) {
+                    if (roll < 0.18) {
                         // QUICK WIN: Long segment with LOW HP - satisfying to destroy!
                         segmentLength = 50 + Math.floor(Math.random() * 30);
-                        hp = Math.floor(baseHP * 0.5) + Math.floor(Math.random() * 8);
-                    } else if (roll < 0.14 && level >= 2) {
+                        hp = Math.floor(baseHP * 0.4) + Math.floor(Math.random() * 6);
+                    } else if (roll < 0.22 && level >= 2) {
                         // BONUS: Fire rate boost segment (glowing blue) - reduced from 6% to 4%
                         segmentType = SEGMENT_BONUS_FIRERATE;
                         segmentLength = 25 + Math.floor(Math.random() * 10);
