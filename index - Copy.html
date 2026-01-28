@@ -218,10 +218,9 @@
         const redScaleImg = new Image();
         const yellowScaleImg = new Image();
         const snakeHeadImg = new Image();
-        const snakeHeadOpenImg = new Image();
         const yellowTailScaleImg = new Image();
         let imagesLoaded = 0;
-        const totalImages = 5;
+        const totalImages = 4;
 
         function onImageLoad() {
             imagesLoaded++;
@@ -235,7 +234,6 @@
         redScaleImg.onload = onImageLoad;
         yellowScaleImg.onload = onImageLoad;
         snakeHeadImg.onload = onImageLoad;
-        snakeHeadOpenImg.onload = onImageLoad;
         yellowTailScaleImg.onload = onImageLoad;
 
         // Handle image load errors - fall back to embedded data or show error
@@ -251,10 +249,6 @@
             console.error('Failed to load snake_head.png');
             onImageLoad(); // Continue anyway
         };
-        snakeHeadOpenImg.onerror = function() {
-            console.error('Failed to load snake_head_open.png');
-            onImageLoad(); // Continue anyway
-        };
         yellowTailScaleImg.onerror = function() {
             console.error('Failed to load yellow_tail_scale.png');
             onImageLoad(); // Continue anyway
@@ -264,7 +258,6 @@
         redScaleImg.src = 'scale_red.png';
         yellowScaleImg.src = 'scale_yellow.png';
         snakeHeadImg.src = 'snake_head.png';
-        snakeHeadOpenImg.src = 'snake_head_open.png';
         yellowTailScaleImg.src = 'yellow_tail_scale.png';
         
         // URL parameters for testing
@@ -369,8 +362,6 @@
         let minAngleReached = Infinity; // Track how close snake got to center
         const GOAT_TRIGGER_ANGLE = 4.5; // Base distance for goat spawns (multiples of this)
         const GOAT_SPAWN_OFFSET = 0.70; // How far ahead of snake (toward center) the goat spawns
-        const MOUTH_OPEN_DISTANCE = 0.5; // How close to goat before mouth opens (in spiral angle units)
-        let snakeMouthOpen = false; // Track if snake mouth should be open
         
         // Spiral constants
         const anglePerPoint = 0.025; // Angular spacing between path points
@@ -611,19 +602,12 @@
                 goat.x = goatPos.x;
                 goat.y = goatPos.y;
 
-                // Check if snake is close to goat - open mouth when approaching
-                const distanceToGoat = snakeAngle - goat.angle;
-                snakeMouthOpen = distanceToGoat > 0 && distanceToGoat < MOUTH_OPEN_DISTANCE;
-
                 // Check if snake head reached the goat (snake moves toward lower angles)
                 // Trigger when front of head covers the goat (not back of head)
                 // The head extends forward, so we check against a larger offset
                 if (snakeAngle <= goat.angle + 0.15) {
                     snakeEatsGoat();
                 }
-            } else {
-                // No goat - mouth closed
-                snakeMouthOpen = false;
             }
 
             // Track how close the snake has gotten to the center
@@ -1338,47 +1322,44 @@
             }
         }
 
-        // Dragon head using the snake_head.png image (or snake_head_open.png when near goat)
+        // Dragon head using the snake_head.png image
         function drawDragonHead(startIndex, colorBand) {
             if (startIndex >= snakePath.length) return;
-
-            // Choose which head image to use based on mouth state
-            const headImg = snakeMouthOpen ? snakeHeadOpenImg : snakeHeadImg;
-
+            
             // Skip if image not loaded
-            if (!headImg.complete || headImg.naturalWidth === 0) return;
-
+            if (!snakeHeadImg.complete || snakeHeadImg.naturalWidth === 0) return;
+            
             const headPoint = snakePath[startIndex];
             let headAngle = 0;
-
+            
             if (startIndex < snakePath.length - 3) {
                 const nextPoint = snakePath[startIndex + 3];
                 headAngle = Math.atan2(headPoint.y - nextPoint.y, headPoint.x - nextPoint.x);
             }
-
+            
             // The snake_head.png image faces 180 degrees (straight down), convert to radians
             const imageBaseAngle = 180 * (Math.PI / 180);
 
             // Rotate 90 degrees counterclockwise to align properly
             const headRotationAdjust = -90 * (Math.PI / 180);
-
+            
             // Size of the head
             const headSize = getSnakeWidth() * 2.2;
-
+            
             ctx.save();
             ctx.translate(headPoint.x, headPoint.y);
             // Rotate: subtract the image's base angle so it aligns with snake direction
             ctx.rotate(headAngle - imageBaseAngle + Math.PI + headRotationAdjust);
-
+            
             // Draw the head image centered on the point, slightly forward
             ctx.drawImage(
-                headImg,
+                snakeHeadImg,
                 -headSize / 2,
                 -headSize / 2,
                 headSize,
                 headSize
             );
-
+            
             ctx.restore();
         }
         
