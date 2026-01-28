@@ -153,58 +153,6 @@
             color: white;
             text-align: center;
         }
-
-        #bonusModal {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            background: rgba(0, 0, 0, 0.85);
-            border-radius: 12px;
-            color: white;
-            text-align: center;
-            padding: 15px;
-            z-index: 100;
-        }
-
-        #bonusModal h2 {
-            font-size: clamp(24px, 6vw, 36px);
-            margin-bottom: 20px;
-            color: #ffd93d;
-        }
-
-        .bonus-buttons {
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        .bonus-btn {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px 30px;
-            min-width: 140px;
-        }
-
-        .bonus-btn .icon {
-            font-size: 32px;
-            margin-bottom: 8px;
-        }
-
-        .bonus-btn.gun-btn {
-            background: linear-gradient(45deg, #aa44ff, #cc66ff);
-        }
-
-        .bonus-btn.fire-btn {
-            background: linear-gradient(45deg, #44aaff, #66ccff);
-        }
     </style>
 </head>
 <body>
@@ -231,7 +179,8 @@
             <button id="startBtn">START GAME</button>
             <p class="controls">
                 Aim with mouse/finger • Hold to fire<br>
-                <span style="color: #8844ff">? Purple = Choose: +1 Gun OR Fire Rate</span>
+                <span style="color: #44aaff">🔥 Blue = Fire Rate Boost</span><br>
+                <span style="color: #aa44ff">🔫 Purple = Extra Gun</span>
             </p>
         </div>
         
@@ -248,20 +197,6 @@
             <p class="stats">You beat all levels!</p>
             <p class="stats">Final Score: <span id="winScore">0</span></p>
             <button id="playAgainBtn">PLAY AGAIN</button>
-        </div>
-
-        <div id="bonusModal" class="hidden">
-            <h2>🎁 CHOOSE YOUR BONUS! 🎁</h2>
-            <div class="bonus-buttons">
-                <button class="bonus-btn gun-btn" id="bonusGunBtn">
-                    <span class="icon">🔫</span>
-                    <span>+1 Gun</span>
-                </button>
-                <button class="bonus-btn fire-btn" id="bonusFireBtn">
-                    <span class="icon">🔥</span>
-                    <span>Fire Rate</span>
-                </button>
-            </div>
         </div>
     </div>
     
@@ -476,7 +411,8 @@
         
         // Segment types for bonuses
         const SEGMENT_NORMAL = 'normal';
-        const SEGMENT_BONUS = 'bonus';
+        const SEGMENT_BONUS_FIRERATE = 'bonus_firerate';
+        const SEGMENT_BONUS_GUN = 'bonus_gun';
         
         // Active power-ups
         let fireRateBonus = 0;
@@ -594,11 +530,16 @@
                         segmentLength = 50 + Math.floor(Math.random() * 30);
                         hp = Math.floor(baseHP * 0.4) + Math.floor(Math.random() * 6);
                         isQuickWin = true;
-                    } else if (roll < 0.25 && level >= 2) {
-                        // BONUS: Player chooses reward (glowing purple)
-                        segmentType = SEGMENT_BONUS;
+                    } else if (roll < 0.22 && level >= 2) {
+                        // BONUS: Fire rate boost segment (glowing blue) - reduced from 6% to 4%
+                        segmentType = SEGMENT_BONUS_FIRERATE;
                         segmentLength = 25 + Math.floor(Math.random() * 10);
                         hp = Math.floor(baseHP * 1.0);
+                    } else if (roll < 0.17 && level >= 3) {
+                        // BONUS: Extra gun segment (glowing purple) - reduced from 4% to 3%
+                        segmentType = SEGMENT_BONUS_GUN;
+                        segmentLength = 30 + Math.floor(Math.random() * 10);
+                        hp = Math.floor(baseHP * 1.2);
                     } else if (roll < 0.30 && level >= 4) {
                         // SUPER HIGH HP: Medium length with 3x long segment HP - tough to kill!
                         // Only spawns on level 4+, ~13% chance when eligible
@@ -644,27 +585,12 @@
                 currentIndex = endIndex;
                 segmentNumber++;
             }
-
-            // Level 1: Force a bonus segment in the last 5 segments
-            if (level === 1 && snakeSegments.length >= 5) {
-                // Pick a random segment from the last 5
-                const lastFiveStart = snakeSegments.length - 5;
-                const bonusIndex = lastFiveStart + Math.floor(Math.random() * 5);
-                const segment = snakeSegments[bonusIndex];
-
-                // Convert to bonus segment
-                segment.segmentType = SEGMENT_BONUS;
-                // Set HP to base HP for bonus segments
-                const baseHP = 18 + level * 18;
-                segment.hp = Math.floor(baseHP * 1.0);
-                segment.maxHp = segment.hp;
-            }
         }
         
         function initGuns() {
             guns = [];
-            // Base guns: always 1, extra guns come from bonuses only
-            const baseGunCount = 1;
+            // Base guns from level + any bonus guns earned
+            const baseGunCount = Math.min(1 + Math.floor(level / 2), 5);
             const gunCount = Math.min(baseGunCount + bonusGuns, 8); // Max 8 guns
             const gunRadius = 30 * scale;
             
@@ -707,24 +633,6 @@
                 indicator.style.opacity = 0;
                 indicator.style.color = 'white';
             }, 1000);
-        }
-
-        // Bonus modal functions
-        function showBonusModal() {
-            gameState = 'bonus_select';
-            document.getElementById('bonusModal').classList.remove('hidden');
-        }
-
-        function selectBonus(type) {
-            document.getElementById('bonusModal').classList.add('hidden');
-
-            if (type === 'gun') {
-                addBonusGun();
-            } else if (type === 'fire') {
-                boostFireRate();
-            }
-
-            gameState = 'playing';
         }
         
         function updateSnake() {
@@ -1080,7 +988,9 @@
             
             // Determine particle colors based on segment type
             let colors;
-            if (segment.segmentType === SEGMENT_BONUS) {
+            if (segment.segmentType === SEGMENT_BONUS_FIRERATE) {
+                colors = ['#44aaff', '#22ddff', '#0088ff', '#88ddff']; // Blue
+            } else if (segment.segmentType === SEGMENT_BONUS_GUN) {
                 colors = ['#aa44ff', '#dd22ff', '#8800ff', '#dd88ff']; // Purple
             } else {
                 colors = particleColors[segment.colorBand];
@@ -1103,9 +1013,11 @@
                 }
             }
             
-            // Show bonus selection modal for bonus segments
-            if (segment.segmentType === SEGMENT_BONUS) {
-                showBonusModal();
+            // Apply power-ups from bonus segments
+            if (segment.segmentType === SEGMENT_BONUS_FIRERATE) {
+                boostFireRate();
+            } else if (segment.segmentType === SEGMENT_BONUS_GUN) {
+                addBonusGun();
             }
             
             score += segment.maxHp * 10;
@@ -1193,7 +1105,8 @@
         
         // Bonus segment colors
         const bonusColors = {
-            'bonus': { fill: '#6622cc', edge: '#4411aa', glow: '#8844ff' }
+            'bonus_firerate': { fill: '#2288dd', edge: '#1155aa', glow: '#44aaff' },
+            'bonus_gun': { fill: '#8822dd', edge: '#5511aa', glow: '#aa44ff' }
         };
         
         function drawSnakeBody() {
@@ -1453,10 +1366,15 @@
                     ctx.lineWidth = 3 * scale;
 
                     // Show bonus icon above HP for bonus segments
-                    if (segment.segmentType === SEGMENT_BONUS) {
-                        ctx.strokeText('?', midPoint.x, midPoint.y - 18 * scale);
+                    if (segment.segmentType === SEGMENT_BONUS_FIRERATE) {
+                        ctx.strokeText('🔥', midPoint.x, midPoint.y - 18 * scale);
+                        ctx.fillStyle = '#44aaff';
+                        ctx.fillText('🔥', midPoint.x, midPoint.y - 18 * scale);
+                        ctx.fillStyle = 'white';
+                    } else if (segment.segmentType === SEGMENT_BONUS_GUN) {
+                        ctx.strokeText('🔫', midPoint.x, midPoint.y - 18 * scale);
                         ctx.fillStyle = '#aa44ff';
-                        ctx.fillText('?', midPoint.x, midPoint.y - 18 * scale);
+                        ctx.fillText('🔫', midPoint.x, midPoint.y - 18 * scale);
                         ctx.fillStyle = 'white';
                     }
 
@@ -2015,8 +1933,6 @@
         document.getElementById('startBtn').addEventListener('click', startGame);
         document.getElementById('restartBtn').addEventListener('click', startGame);
         document.getElementById('playAgainBtn').addEventListener('click', startGame);
-        document.getElementById('bonusGunBtn').addEventListener('click', () => selectBonus('gun'));
-        document.getElementById('bonusFireBtn').addEventListener('click', () => selectBonus('fire'));
         
         // Helper to convert screen coordinates to canvas coordinates
         function getCanvasCoords(clientX, clientY) {
