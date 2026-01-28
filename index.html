@@ -473,7 +473,8 @@
                     maxHp: hp,
                     colorBand: segmentNumber % 2,
                     isHead: segmentNumber === 0,
-                    segmentType: segmentType
+                    segmentType: segmentType,
+                    hitFlash: 0 // Timer for hit flash effect
                 });
                 
                 currentIndex = endIndex;
@@ -552,6 +553,13 @@
                     return { segment: seg, index: i };
                 }
             }
+
+            // If no segment found and we're in the head buffer zone (path indices before first segment),
+            // treat it as a hit on the first segment (head segment)
+            if (snakeSegments.length > 0 && pathIndex < snakeSegments[0].startIndex) {
+                return { segment: snakeSegments[0], index: 0 };
+            }
+
             return null;
         }
         
@@ -618,8 +626,9 @@
                         const segInfo = getSegmentAtIndex(j);
                         if (segInfo) {
                             segInfo.segment.hp -= bullet.damage;
+                            segInfo.segment.hitFlash = 8; // Set flash timer (frames)
                             hit = true;
-                            
+
                             damageNumbers.push({
                                 x: p.x + (Math.random() - 0.5) * 20,
                                 y: p.y,
@@ -748,12 +757,19 @@
                 p.life--;
                 if (p.life <= 0) particles.splice(i, 1);
             }
-            
+
             for (let i = damageNumbers.length - 1; i >= 0; i--) {
                 const d = damageNumbers[i];
                 d.y += d.vy;
                 d.life--;
                 if (d.life <= 0) damageNumbers.splice(i, 1);
+            }
+
+            // Update hit flash timers for segments
+            for (const segment of snakeSegments) {
+                if (segment.hitFlash > 0) {
+                    segment.hitFlash--;
+                }
             }
         }
         
@@ -906,7 +922,44 @@
                 }
             }
             
-            // ===== THIRD PASS: Draw HP numbers, head, and tail (always) =====
+            // ===== THIRD PASS: Draw hit flash effect on damaged segments =====
+            for (let segIdx = 0; segIdx < snakeSegments.length; segIdx++) {
+                const segment = snakeSegments[segIdx];
+
+                if (segment.hitFlash > 0) {
+                    const startI = segment.isHead ? 0 : Math.max(0, segment.startIndex);
+                    const endI = Math.min(snakePath.length - 1, segment.endIndex);
+
+                    if (startI < snakePath.length && endI >= 0) {
+                        // Flickering effect - intensity varies rapidly
+                        const flickerSpeed = Date.now() / 30;
+                        const flicker = 0.5 + 0.5 * Math.sin(flickerSpeed * 10);
+                        const baseAlpha = (segment.hitFlash / 8) * 0.7; // Fade out over time
+                        const alpha = baseAlpha * (0.5 + flicker * 0.5);
+
+                        // Draw white glow overlay
+                        ctx.beginPath();
+                        ctx.moveTo(snakePath[startI].x, snakePath[startI].y);
+                        for (let i = startI; i <= endI && i < snakePath.length; i++) {
+                            ctx.lineTo(snakePath[i].x, snakePath[i].y);
+                        }
+
+                        // Outer glow
+                        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.5})`;
+                        ctx.lineWidth = snakeW + 16 * scale;
+                        ctx.lineCap = 'round';
+                        ctx.lineJoin = 'round';
+                        ctx.stroke();
+
+                        // Inner bright flash
+                        ctx.strokeStyle = `rgba(255, 255, 200, ${alpha})`;
+                        ctx.lineWidth = snakeW;
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            // ===== FOURTH PASS: Draw HP numbers, head, and tail (always) =====
             for (let segIdx = 0; segIdx < snakeSegments.length; segIdx++) {
                 const segment = snakeSegments[segIdx];
                 
