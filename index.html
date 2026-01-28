@@ -424,13 +424,13 @@
                 let hp;
 
                 if (segmentNumber === 0) {
-                    // HEAD SEGMENT: Short but VERY high HP - tough to kill!
+                    // HEAD SEGMENT: Short but high HP - tough to kill!
                     segmentLength = 15 + Math.floor(Math.random() * 5);
-                    hp = Math.floor(baseHP * 4) + level * 25;
+                    hp = Math.floor(baseHP * 2) + level * 20;
                 } else if (segmentNumber < 3) {
-                    // First few segments near head: Short, high HP
+                    // First few segments near head: Short, moderate-high HP
                     segmentLength = 18 + Math.floor(Math.random() * 8);
-                    hp = Math.floor(baseHP * 2.5) + level * 15;
+                    hp = Math.floor(baseHP * 1.5) + level * 12;
                 } else {
                     // Rest of snake: Random variety
                     const roll = Math.random();
