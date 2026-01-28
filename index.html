@@ -540,11 +540,19 @@
                         segmentType = SEGMENT_BONUS_GUN;
                         segmentLength = 30 + Math.floor(Math.random() * 10);
                         hp = Math.floor(baseHP * 1.2);
-                    } else if (roll < 0.45) {
+                    } else if (roll < 0.30 && level >= 4) {
+                        // SUPER HIGH HP: Medium length with 3x long segment HP - tough to kill!
+                        // Only spawns on level 4+, ~13% chance when eligible
+                        segmentLength = 25 + Math.floor(Math.random() * 15);
+                        // Long segment HP formula is: baseHP * 1.8 + random * level * 6
+                        // Super high HP = 3x that amount
+                        const longHP = Math.floor(baseHP * 1.8) + Math.floor(Math.random() * (level * 6));
+                        hp = longHP * 3;
+                    } else if (roll < 0.50) {
                         // MEDIUM: Normal length, normal HP
                         segmentLength = 25 + Math.floor(Math.random() * 15);
                         hp = baseHP + Math.floor(Math.random() * (level * 5));
-                    } else if (roll < 0.70) {
+                    } else if (roll < 0.75) {
                         // LONG: Longer segment, proportionally more HP
                         segmentLength = 40 + Math.floor(Math.random() * 25);
                         hp = Math.floor(baseHP * 1.8) + Math.floor(Math.random() * (level * 6));
@@ -1237,6 +1245,20 @@
             }
             
             // ===== THIRD PASS: Draw hit flash effect on damaged segments =====
+            // Flash colors based on segment color band (bright, glowing versions)
+            const flashColors = {
+                0: { // Red segments - bright glowing red
+                    outer: [255, 100, 100],   // Bright red glow
+                    inner: [255, 150, 150],   // Lighter red
+                    core: [255, 200, 200]     // Near-white red
+                },
+                1: { // Yellow segments - bright glowing yellow
+                    outer: [255, 220, 80],    // Bright yellow glow
+                    inner: [255, 240, 150],   // Lighter yellow
+                    core: [255, 255, 200]     // Near-white yellow
+                }
+            };
+
             for (let segIdx = 0; segIdx < snakeSegments.length; segIdx++) {
                 const segment = snakeSegments[segIdx];
 
@@ -1253,7 +1275,10 @@
                         const baseAlpha = (segment.hitFlash / 10); // Fade out over time
                         const alpha = baseAlpha * (0.6 + flicker * 0.4);
 
-                        // Draw white glow overlay
+                        // Get flash colors based on segment's color band
+                        const colors = flashColors[segment.colorBand];
+
+                        // Draw colored glow overlay
                         ctx.beginPath();
                         ctx.moveTo(snakePath[startI].x, snakePath[startI].y);
                         for (let i = startI; i <= endI && i < snakePath.length; i++) {
@@ -1264,18 +1289,18 @@
                         ctx.lineCap = 'butt';
                         ctx.lineJoin = 'round';
 
-                        // Outer glow - more intense
-                        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.8})`;
+                        // Outer glow - colored and intense
+                        ctx.strokeStyle = `rgba(${colors.outer[0]}, ${colors.outer[1]}, ${colors.outer[2]}, ${alpha * 0.8})`;
                         ctx.lineWidth = snakeW + 12 * scale;
                         ctx.stroke();
 
-                        // Inner bright flash - much more intense
-                        ctx.strokeStyle = `rgba(255, 255, 220, ${Math.min(1, alpha * 1.3)})`;
+                        // Inner bright flash - lighter colored
+                        ctx.strokeStyle = `rgba(${colors.inner[0]}, ${colors.inner[1]}, ${colors.inner[2]}, ${Math.min(1, alpha * 1.3)})`;
                         ctx.lineWidth = snakeW - 4 * scale;
                         ctx.stroke();
 
-                        // Core white flash for extra intensity
-                        ctx.strokeStyle = `rgba(255, 255, 255, ${Math.min(1, alpha * 1.5)})`;
+                        // Core flash - near-white with color tint for extra intensity
+                        ctx.strokeStyle = `rgba(${colors.core[0]}, ${colors.core[1]}, ${colors.core[2]}, ${Math.min(1, alpha * 1.5)})`;
                         ctx.lineWidth = snakeW * 0.5;
                         ctx.stroke();
                     }
@@ -1777,9 +1802,10 @@
         function startGame() {
             gameState = 'playing';
             score = 0;
-            level = 1;
+            level = startLevel;
             lives = 3;
-            snakeSpeed = 0.15;
+            // Adjust snake speed based on starting level
+            snakeSpeed = 0.15 + (startLevel - 1) * 0.03;
             bullets = [];
             particles = [];
             damageNumbers = [];
