@@ -384,9 +384,10 @@
             // MUCH longer snake - fills entire visible path and extends off-screen
             const pathLength = 800 + level * 100;
             
-            // Snake starts VERY close to center - creates urgency!
-            // Head starts just outside the platform
-            const headRadius = getPlatformRadius() + 30 * scale;
+            // Snake starts close to center - creates urgency!
+            // Head starts just outside the platform (a bit further back on level 1)
+            const level1Offset = level === 1 ? 15 * scale : 0; // Extra distance for level 1
+            const headRadius = getPlatformRadius() + 30 * scale + level1Offset;
             
             // Calculate starting angle for this radius
             snakeAngle = (headRadius - getSpiralBase()) / getSpiralGrowth();
@@ -408,7 +409,7 @@
         }
         
         function createVariableSegments() {
-            const baseHP = 18 + level * 10; // Much higher base HP
+            const baseHP = 18 + level * 18; // Higher HP scaling per level
 
             // Buffer zone for the head - the first segment starts after this
             // This ensures the head doesn't cover the HP number and segment
@@ -425,11 +426,11 @@
                 if (segmentNumber === 0) {
                     // HEAD SEGMENT: Short but VERY high HP - tough to kill!
                     segmentLength = 15 + Math.floor(Math.random() * 5);
-                    hp = Math.floor(baseHP * 4) + level * 15;
+                    hp = Math.floor(baseHP * 4) + level * 25;
                 } else if (segmentNumber < 3) {
                     // First few segments near head: Short, high HP
                     segmentLength = 18 + Math.floor(Math.random() * 8);
-                    hp = Math.floor(baseHP * 2.5) + level * 8;
+                    hp = Math.floor(baseHP * 2.5) + level * 15;
                 } else {
                     // Rest of snake: Random variety
                     const roll = Math.random();
@@ -438,13 +439,13 @@
                         // QUICK WIN: Long segment with LOW HP - satisfying to destroy!
                         segmentLength = 50 + Math.floor(Math.random() * 30);
                         hp = Math.floor(baseHP * 0.5) + Math.floor(Math.random() * 8);
-                    } else if (roll < 0.16 && level >= 2) {
-                        // BONUS: Fire rate boost segment (glowing blue)
+                    } else if (roll < 0.14 && level >= 2) {
+                        // BONUS: Fire rate boost segment (glowing blue) - reduced from 6% to 4%
                         segmentType = SEGMENT_BONUS_FIRERATE;
                         segmentLength = 25 + Math.floor(Math.random() * 10);
                         hp = Math.floor(baseHP * 1.0);
-                    } else if (roll < 0.20 && level >= 3) {
-                        // BONUS: Extra gun segment (glowing purple)
+                    } else if (roll < 0.17 && level >= 3) {
+                        // BONUS: Extra gun segment (glowing purple) - reduced from 4% to 3%
                         segmentType = SEGMENT_BONUS_GUN;
                         segmentLength = 30 + Math.floor(Math.random() * 10);
                         hp = Math.floor(baseHP * 1.2);
@@ -474,7 +475,7 @@
                     colorBand: segmentNumber % 2,
                     isHead: segmentNumber === 0,
                     segmentType: segmentType,
-                    hitFlash: 0 // Timer for hit flash effect
+                    hitFlash: 0 // Timer for hit flash effect (10 frames max)
                 });
                 
                 currentIndex = endIndex;
@@ -562,6 +563,34 @@
 
             return null;
         }
+
+        // Find the closest segment to a given world position (for more accurate hit detection)
+        function getClosestSegment(x, y) {
+            let closestSeg = null;
+            let closestDist = Infinity;
+            let closestIdx = -1;
+
+            for (let i = 0; i < snakeSegments.length; i++) {
+                const seg = snakeSegments[i];
+                // Check points within this segment's actual range
+                for (let j = seg.startIndex; j < seg.endIndex && j < snakePath.length; j++) {
+                    const p = snakePath[j];
+                    const dx = x - p.x;
+                    const dy = y - p.y;
+                    const dist = dx * dx + dy * dy; // squared distance for speed
+                    if (dist < closestDist) {
+                        closestDist = dist;
+                        closestSeg = seg;
+                        closestIdx = i;
+                    }
+                }
+            }
+
+            if (closestSeg) {
+                return { segment: closestSeg, index: closestIdx, distSq: closestDist };
+            }
+            return null;
+        }
         
         function updateGuns() {
             // All guns aim at mouse position
@@ -612,52 +641,46 @@
                 const bullet = bullets[i];
                 bullet.x += bullet.vx;
                 bullet.y += bullet.vy;
-                
+
                 let hit = false;
                 const snakeW = getSnakeWidth();
-                
-                for (let j = 0; j < snakePath.length; j += 2) {
-                    const p = snakePath[j];
-                    const dx = bullet.x - p.x;
-                    const dy = bullet.y - p.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    
-                    if (dist < snakeW / 2 + 4 * scale) {
-                        const segInfo = getSegmentAtIndex(j);
-                        if (segInfo) {
-                            segInfo.segment.hp -= bullet.damage;
-                            segInfo.segment.hitFlash = 8; // Set flash timer (frames)
-                            hit = true;
+                const hitRadius = snakeW / 2 + 4 * scale;
+                const hitRadiusSq = hitRadius * hitRadius;
 
-                            damageNumbers.push({
-                                x: p.x + (Math.random() - 0.5) * 20,
-                                y: p.y,
-                                value: bullet.damage,
-                                life: 25,
-                                vy: -3
-                            });
-                            
-                            const colors = particleColors[segInfo.segment.colorBand];
-                            for (let k = 0; k < 8; k++) {
-                                particles.push({
-                                    x: bullet.x,
-                                    y: bullet.y,
-                                    vx: (Math.random() - 0.5) * 12,
-                                    vy: (Math.random() - 0.5) * 12,
-                                    life: 25,
-                                    color: colors[k % colors.length]
-                                });
-                            }
-                            
-                            if (segInfo.segment.hp <= 0) {
-                                destroySegment(segInfo.index);
-                            }
-                        }
-                        break;
+                // Find the closest segment to this bullet
+                const segInfo = getClosestSegment(bullet.x, bullet.y);
+
+                if (segInfo && segInfo.distSq < hitRadiusSq) {
+                    segInfo.segment.hp -= bullet.damage;
+                    segInfo.segment.hitFlash = 10; // Set flash timer (frames)
+                    hit = true;
+
+                    damageNumbers.push({
+                        x: bullet.x + (Math.random() - 0.5) * 20,
+                        y: bullet.y,
+                        value: bullet.damage,
+                        life: 25,
+                        vy: -3
+                    });
+
+                    const colors = particleColors[segInfo.segment.colorBand];
+                    for (let k = 0; k < 8; k++) {
+                        particles.push({
+                            x: bullet.x,
+                            y: bullet.y,
+                            vx: (Math.random() - 0.5) * 12,
+                            vy: (Math.random() - 0.5) * 12,
+                            life: 25,
+                            color: colors[k % colors.length]
+                        });
+                    }
+
+                    if (segInfo.segment.hp <= 0) {
+                        destroySegment(segInfo.index);
                     }
                 }
-                
-                if (hit || bullet.x < 0 || bullet.x > canvasWidth || 
+
+                if (hit || bullet.x < 0 || bullet.x > canvasWidth ||
                     bullet.y < 0 || bullet.y > canvasHeight) {
                     bullets.splice(i, 1);
                 }
@@ -927,15 +950,17 @@
                 const segment = snakeSegments[segIdx];
 
                 if (segment.hitFlash > 0) {
-                    const startI = segment.isHead ? 0 : Math.max(0, segment.startIndex);
-                    const endI = Math.min(snakePath.length - 1, segment.endIndex);
+                    // Shift flash forward to align with visual segment (toward head)
+                    const shift = 2;
+                    const startI = Math.max(0, segment.startIndex - shift);
+                    const endI = Math.min(snakePath.length - 1, segment.endIndex - 1 - shift);
 
-                    if (startI < snakePath.length && endI >= 0) {
+                    if (startI < endI && startI < snakePath.length && endI >= 0) {
                         // Flickering effect - intensity varies rapidly
-                        const flickerSpeed = Date.now() / 30;
-                        const flicker = 0.5 + 0.5 * Math.sin(flickerSpeed * 10);
-                        const baseAlpha = (segment.hitFlash / 8) * 0.7; // Fade out over time
-                        const alpha = baseAlpha * (0.5 + flicker * 0.5);
+                        const flickerSpeed = Date.now() / 25;
+                        const flicker = 0.5 + 0.5 * Math.sin(flickerSpeed * 12);
+                        const baseAlpha = (segment.hitFlash / 10); // Fade out over time
+                        const alpha = baseAlpha * (0.6 + flicker * 0.4);
 
                         // Draw white glow overlay
                         ctx.beginPath();
@@ -944,16 +969,23 @@
                             ctx.lineTo(snakePath[i].x, snakePath[i].y);
                         }
 
-                        // Outer glow
-                        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.5})`;
-                        ctx.lineWidth = snakeW + 16 * scale;
-                        ctx.lineCap = 'round';
+                        // Use butt cap to prevent the line ends from extending past segment boundaries
+                        ctx.lineCap = 'butt';
                         ctx.lineJoin = 'round';
+
+                        // Outer glow - more intense
+                        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.8})`;
+                        ctx.lineWidth = snakeW + 12 * scale;
                         ctx.stroke();
 
-                        // Inner bright flash
-                        ctx.strokeStyle = `rgba(255, 255, 200, ${alpha})`;
-                        ctx.lineWidth = snakeW;
+                        // Inner bright flash - much more intense
+                        ctx.strokeStyle = `rgba(255, 255, 220, ${Math.min(1, alpha * 1.3)})`;
+                        ctx.lineWidth = snakeW - 4 * scale;
+                        ctx.stroke();
+
+                        // Core white flash for extra intensity
+                        ctx.strokeStyle = `rgba(255, 255, 255, ${Math.min(1, alpha * 1.5)})`;
+                        ctx.lineWidth = snakeW * 0.5;
                         ctx.stroke();
                     }
                 }
@@ -1367,7 +1399,7 @@
             }
             
             level++;
-            snakeSpeed += 0.015;
+            snakeSpeed += 0.03; // Increased speed scaling per level
             
             const indicator = document.getElementById('levelIndicator');
             indicator.textContent = `Level ${level}`;
