@@ -1602,44 +1602,101 @@
             ctx.fill();
         }
         
+        // Background themes that rotate based on level
+        const backgroundThemes = {
+            grass: {
+                baseColor: '#4a8f15',
+                colors: ['#6aaf35', '#5a9f25', '#4a8f15', '#3a7f05'],
+                pathColor: 'rgba(139, 115, 85, 0.45)',
+                detailColor: 'rgba(255, 255, 255, 0.08)',
+                detailType: 'grass' // little grass blades
+            },
+            desert: {
+                baseColor: '#d4a84b',
+                colors: ['#e8c874', '#d4a84b', '#c49432', '#a67c28'],
+                pathColor: 'rgba(160, 120, 60, 0.4)',
+                detailColor: 'rgba(0, 0, 0, 0.05)',
+                detailType: 'rocks' // small rocks/pebbles
+            },
+            water: {
+                baseColor: '#2878a8',
+                colors: ['#4a9ac8', '#3888b8', '#2878a8', '#1868a0'],
+                pathColor: 'rgba(20, 60, 100, 0.35)',
+                detailColor: 'rgba(255, 255, 255, 0.15)',
+                detailType: 'waves' // wave patterns
+            },
+            snow: {
+                baseColor: '#c8d8e8',
+                colors: ['#f0f8ff', '#e0eef8', '#c8d8e8', '#b0c8d8'],
+                pathColor: 'rgba(150, 170, 190, 0.4)',
+                detailColor: 'rgba(255, 255, 255, 0.3)',
+                detailType: 'snowflakes' // snowflake dots
+            }
+        };
+
+        function getThemeForLevel(lvl) {
+            const themeOrder = ['grass', 'desert', 'water', 'snow'];
+            const index = (lvl - 1) % themeOrder.length;
+            return backgroundThemes[themeOrder[index]];
+        }
+
         function renderBackgroundToCache() {
             const bgCtx = backgroundCtx;
-
-            // Sky gradient at top
-            const skyHeight = 100 * scale;
-            const skyGrad = bgCtx.createLinearGradient(0, 0, 0, skyHeight);
-            skyGrad.addColorStop(0, '#87ceeb');
-            skyGrad.addColorStop(1, '#98d977');
-            bgCtx.fillStyle = skyGrad;
-            bgCtx.fillRect(0, 0, canvasWidth, skyHeight);
-
-            // Grass
+            const theme = getThemeForLevel(level);
             const maxR = Math.max(canvasWidth, canvasHeight);
-            const grassGrad = bgCtx.createRadialGradient(centerX, centerY, getSpiralBase(), centerX, centerY, maxR);
-            grassGrad.addColorStop(0, '#6aaf35');
-            grassGrad.addColorStop(0.3, '#5a9f25');
-            grassGrad.addColorStop(0.7, '#4a8f15');
-            grassGrad.addColorStop(1, '#3a7f05');
-            bgCtx.fillStyle = grassGrad;
-            bgCtx.fillRect(0, skyHeight * 0.7, canvasWidth, canvasHeight - skyHeight * 0.7);
 
-            // Grass texture hints (use seeded positions so they don't flicker)
-            bgCtx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            // Main background gradient (radial from center)
+            const bgGrad = bgCtx.createRadialGradient(centerX, centerY, getSpiralBase(), centerX, centerY, maxR);
+            bgGrad.addColorStop(0, theme.colors[0]);
+            bgGrad.addColorStop(0.3, theme.colors[1]);
+            bgGrad.addColorStop(0.7, theme.colors[2]);
+            bgGrad.addColorStop(1, theme.colors[3]);
+            bgCtx.fillStyle = bgGrad;
+            bgCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+            // Draw theme-specific details
+            bgCtx.strokeStyle = theme.detailColor;
+            bgCtx.fillStyle = theme.detailColor;
             bgCtx.lineWidth = 2 * scale;
-            for (let i = 0; i < 30; i++) {
-                // Use deterministic positions based on index
-                const gx = ((i * 137) % 100) / 100 * canvasWidth;
-                const gy = skyHeight + ((i * 251) % 100) / 100 * (canvasHeight - skyHeight);
-                const offsetX = (((i * 73) % 100) / 100 - 0.5) * 8 * scale;
-                const offsetY = (8 + ((i * 197) % 100) / 100 * 8) * scale;
-                bgCtx.beginPath();
-                bgCtx.moveTo(gx, gy);
-                bgCtx.lineTo(gx + offsetX, gy - offsetY);
-                bgCtx.stroke();
+
+            for (let i = 0; i < 40; i++) {
+                // Deterministic positions based on index
+                const dx = ((i * 137) % 100) / 100 * canvasWidth;
+                const dy = ((i * 251) % 100) / 100 * canvasHeight;
+
+                if (theme.detailType === 'grass') {
+                    // Grass blades
+                    const offsetX = (((i * 73) % 100) / 100 - 0.5) * 8 * scale;
+                    const offsetY = (8 + ((i * 197) % 100) / 100 * 8) * scale;
+                    bgCtx.beginPath();
+                    bgCtx.moveTo(dx, dy);
+                    bgCtx.lineTo(dx + offsetX, dy - offsetY);
+                    bgCtx.stroke();
+                } else if (theme.detailType === 'rocks') {
+                    // Small rocks/pebbles
+                    const rockSize = (2 + ((i * 89) % 100) / 100 * 4) * scale;
+                    bgCtx.beginPath();
+                    bgCtx.ellipse(dx, dy, rockSize, rockSize * 0.7, ((i * 31) % 100) / 100 * Math.PI, 0, Math.PI * 2);
+                    bgCtx.fill();
+                } else if (theme.detailType === 'waves') {
+                    // Wave curves
+                    const waveLength = (15 + ((i * 61) % 100) / 100 * 20) * scale;
+                    bgCtx.beginPath();
+                    bgCtx.moveTo(dx - waveLength, dy);
+                    bgCtx.quadraticCurveTo(dx - waveLength / 2, dy - 5 * scale, dx, dy);
+                    bgCtx.quadraticCurveTo(dx + waveLength / 2, dy + 5 * scale, dx + waveLength, dy);
+                    bgCtx.stroke();
+                } else if (theme.detailType === 'snowflakes') {
+                    // Snowflake dots
+                    const snowSize = (1 + ((i * 47) % 100) / 100 * 3) * scale;
+                    bgCtx.beginPath();
+                    bgCtx.arc(dx, dy, snowSize, 0, Math.PI * 2);
+                    bgCtx.fill();
+                }
             }
 
             // Path hint (spiral track)
-            bgCtx.strokeStyle = 'rgba(139, 115, 85, 0.45)';
+            bgCtx.strokeStyle = theme.pathColor;
             bgCtx.lineWidth = getSnakeWidth() + 10 * scale;
             bgCtx.lineCap = 'round';
             bgCtx.beginPath();
@@ -1704,6 +1761,9 @@
             nextGoatThreshold = 1;
             minAngleReached = Infinity;
 
+            // Redraw background for level theme
+            backgroundNeedsRedraw = true;
+
             document.getElementById('startScreen').classList.add('hidden');
             document.getElementById('gameOverScreen').classList.add('hidden');
             document.getElementById('winScreen').classList.add('hidden');
@@ -1721,7 +1781,8 @@
             
             level++;
             snakeSpeed += 0.03; // Increased speed scaling per level
-            
+            backgroundNeedsRedraw = true; // Redraw background for new theme
+
             const indicator = document.getElementById('levelIndicator');
             indicator.textContent = `Level ${level}`;
             indicator.style.opacity = 1;
