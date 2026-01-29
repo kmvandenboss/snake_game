@@ -557,6 +557,8 @@
             let currentIndex = headBufferPoints; // Start first segment after the head
             let segmentNumber = 0;
             let quickWinCount = 0; // Track how many quick win segments we've created
+            let bonusCount = 0; // Track how many bonus segments we've created
+            const maxBonuses = level >= 3 ? 2 : 99; // Cap at 2 bonuses for level 3+
 
             while (currentIndex < snakePath.length - 10) {
                 let segmentType = SEGMENT_NORMAL;
@@ -594,11 +596,13 @@
                         segmentLength = 50 + Math.floor(Math.random() * 30);
                         hp = Math.floor(baseHP * 0.4) + Math.floor(Math.random() * 6);
                         isQuickWin = true;
-                    } else if (roll < 0.25 && level >= 2) {
+                    } else if (roll < 0.25 && level >= 2 && bonusCount < maxBonuses) {
                         // BONUS: Player chooses reward (glowing purple)
+                        // Level 3+: capped at 2 bonus segments per level
                         segmentType = SEGMENT_BONUS;
                         segmentLength = 25 + Math.floor(Math.random() * 10);
                         hp = Math.floor(baseHP * 1.0);
+                        bonusCount++;
                     } else if (roll < 0.30 && level >= 4) {
                         // SUPER HIGH HP: Medium length with 3x long segment HP - tough to kill!
                         // Only spawns on level 4+, ~13% chance when eligible
