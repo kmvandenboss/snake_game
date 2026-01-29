@@ -216,6 +216,7 @@
             <span id="livesDisplay">❤️❤️❤️</span>
             <span id="levelDisplay">Level: 1</span>
             <span id="gunsDisplay">Guns: 1</span>
+            <span id="debugDisplay" style="color: #ff0; font-size: 12px;"></span>
         </div>
         
         <div id="levelIndicator"></div>
@@ -548,7 +549,7 @@
         }
 
         function createVariableSegments() {
-            const baseHP = 18 + level * 18; // Higher HP scaling per level
+            const baseHP = 18 + level * 22; // Higher HP scaling per level
 
             // Buffer zone for the head - the first segment starts after this
             // This ensures the head doesn't cover the HP number and segment
@@ -591,7 +592,10 @@
                     // Level 1: Force extra quick win segments (at least 2 total in first 6 segments)
                     const forceQuickWin = level === 1 && quickWinCount < 2 && segmentNumber >= 3 && segmentNumber <= 5 && (segmentNumber === 5 || roll < 0.5);
 
-                    if (roll < 0.18 || forceQuickWin) {
+                    // Quick win chance: 18% for levels 1-2, 9% for level 3+
+                    const quickWinChance = level <= 2 ? 0.18 : 0.09;
+
+                    if (roll < quickWinChance || forceQuickWin) {
                         // QUICK WIN: Long segment with LOW HP - satisfying to destroy!
                         segmentLength = 50 + Math.floor(Math.random() * 30);
                         hp = Math.floor(baseHP * 0.4) + Math.floor(Math.random() * 6);
@@ -929,17 +933,21 @@
         function updateGuns() {
             // All guns aim at mouse position
             const aimAngle = Math.atan2(mouseY - centerY, mouseX - centerX);
-            
+
             for (const gun of guns) {
                 gun.angle = aimAngle;
             }
-            
+
             // Fire rate depends on whether holding mouse/touch
             // Holding = fast fire, not holding = slow auto-fire
             globalFireTimer--;
             const fastFireRate = Math.max(6, fireRate - fireRateBonus); // Fast when holding
             const slowFireRate = fastFireRate * 3; // 3x slower when not holding
             const effectiveFireRate = isPointerDown ? fastFireRate : slowFireRate;
+
+            // Debug display
+            document.getElementById('debugDisplay').textContent =
+                `FR:${fireRate} Bonus:${fireRateBonus} Eff:${effectiveFireRate} Timer:${globalFireTimer} Guns:${guns.length}`;
 
             if (globalFireTimer <= 0) {
                 globalFireTimer = effectiveFireRate;
